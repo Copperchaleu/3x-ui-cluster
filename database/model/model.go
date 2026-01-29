@@ -30,10 +30,28 @@ type User struct {
 	Password string `json:"password"`
 }
 
+// Slave represents a slave server connected to the master.
+type Slave struct {
+	Id          int    `json:"id" form:"id" gorm:"primaryKey;autoIncrement"`
+	Name        string `json:"name" form:"name"`
+	Address     string `json:"address" form:"address"` // Slave IP or Domain
+	Port        int    `json:"port" form:"port"`       // Slave Port (optional if using reverse WS)
+	Secret      string `json:"secret" form:"secret"`   // Auth Token for Slave
+	Status      string `json:"status" form:"status"`   // online, offline
+	LastSeen    int64  `json:"lastSeen" form:"lastSeen"`
+	Version     string `json:"version" form:"version"` // Slave version
+	SystemStats string `json:"systemStats" form:"systemStats"` // CPU/Mem stats (JSON)
+}
+
+func (Slave) TableName() string {
+	return "slaves"
+}
+
 // Inbound represents an Xray inbound configuration with traffic statistics and settings.
 type Inbound struct {
 	Id                   int                  `json:"id" form:"id" gorm:"primaryKey;autoIncrement"`                                                    // Unique identifier
 	UserId               int                  `json:"-"`                                                                                               // Associated user ID
+	SlaveId              int                  `json:"slaveId" form:"slaveId" gorm:"default:0"`                                                           // Associated Slave ID (0 = Master)
 	Up                   int64                `json:"up" form:"up"`                                                                                    // Upload traffic in bytes
 	Down                 int64                `json:"down" form:"down"`                                                                                // Download traffic in bytes
 	Total                int64                `json:"total" form:"total"`                                                                              // Total traffic limit in bytes

@@ -268,6 +268,14 @@
                           color="blue">Reality</a-tag>
                       </template>
                     </template>
+                    <template slot="slave" slot-scope="text, dbInbound">
+                      <a-tag v-if="dbInbound.slaveId === 0" color="blue">
+                        {{ i18n "pages.slaves.master" }}
+                      </a-tag>
+                      <a-tag v-else color="green">
+                        [[ getSlaveNameById(dbInbound.slaveId) ]]
+                      </a-tag>
+                    </template>
                     <template slot="clients" slot-scope="text, dbInbound">
                       <template v-if="clientCount[dbInbound.id]">
                         <a-tag :style="{ margin: '0' }" color="green">[[ clientCount[dbInbound.id].clients ]]</a-tag>
@@ -641,6 +649,11 @@
     width: 70,
     scopedSlots: { customRender: 'protocol' },
   }, {
+    title: '{{ i18n "pages.slaves.title" }}',
+    align: 'center',
+    width: 60,
+    scopedSlots: { customRender: 'slave' },
+  }, {
     title: '{{ i18n "clients" }}',
     align: 'left',
     width: 50,
@@ -701,7 +714,7 @@
     { title: '{{ i18n "pages.inbounds.info" }}', width: 10, align: 'center', scopedSlots: { customRender: 'info' } },
   ];
 
-  const app = new Vue({
+  window.app = new Vue({
     delimiters: ['[[', ']]'],
     el: '#app',
     mixins: [MediaQueryMixin],
@@ -714,6 +727,7 @@
       },
       inbounds: [],
       dbInbounds: [],
+      slaves: [],
       searchKey: '',
       enableFilter: false,
       filterBy: '',
@@ -797,6 +811,19 @@
           this.datepicker = datepicker;
           this.ipLimitEnable = ipLimitEnable;
         }
+      },
+      async getSlaves() {
+        const msg = await HttpUtil.get('/panel/api/slave/list');
+        if (msg.success) {
+          this.slaves = msg.obj || [];
+        }
+      },
+      getSlaveNameById(slaveId) {
+        if (slaveId === 0) {
+          return '{{ i18n "pages.slaves.master" }}';
+        }
+        const slave = this.slaves.find(s => s.id === slaveId);
+        return slave ? slave.name : `Slave #${slaveId}`;
       },
       setInbounds(dbInbounds) {
         this.inbounds.splice(0);
@@ -1063,6 +1090,7 @@
           expiryTime: dbInbound.expiryTime,
           trafficReset: dbInbound.trafficReset,
           lastTrafficResetTime: dbInbound.lastTrafficResetTime,
+          slaveId: dbInbound.slaveId || 0,
 
           listen: inbound.listen,
           port: inbound.port,
@@ -1088,6 +1116,7 @@
           expiryTime: dbInbound.expiryTime,
           trafficReset: dbInbound.trafficReset,
           lastTrafficResetTime: dbInbound.lastTrafficResetTime,
+          slaveId: dbInbound.slaveId || 0,
 
           listen: inbound.listen,
           port: inbound.port,
@@ -1101,6 +1130,8 @@
         }
         data.sniffing = inbound.sniffing.toString();
 
+        console.log('Updating inbound with data:', data);
+        console.log('slaveId being sent:', data.slaveId);
         await this.submit(`/panel/api/inbounds/update/${dbInbound.id}`, data, inModal);
       },
       openAddClient(dbInboundId) {
@@ -1587,6 +1618,7 @@
       }
       this.loading();
       this.getDefaultSettings();
+      this.getSlaves();
       
       // Initial data fetch
       this.getDBInbounds().then(() => {

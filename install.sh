@@ -757,6 +757,109 @@ config_after_install() {
     ${xui_folder}/x-ui migrate
 }
 
+install_x-ui_slave() {
+    local master_url="$1"
+    local slave_secret="$2"
+    
+    cd ${xui_folder%/x-ui}/
+    
+    # Download latest version
+    tag_version=$(curl -Ls "https://api.github.com/repos/MHSanaei/3x-ui/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+    if [[ ! -n "$tag_version" ]]; then
+        echo -e "${yellow}Trying to fetch version with IPv4...${plain}"
+        tag_version=$(curl -4 -Ls "https://api.github.com/repos/MHSanaei/3x-ui/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+        if [[ ! -n "$tag_version" ]]; then
+            echo -e "${red}Failed to fetch x-ui version, it may be due to GitHub API restrictions, please try it later${plain}"
+            exit 1
+        fi
+    fi
+    
+    echo -e "Got x-ui latest version: ${tag_version}, beginning the installation..."
+    curl -4fLRo ${xui_folder}-linux-$(arch).tar.gz https://github.com/MHSanaei/3x-ui/releases/download/${tag_version}/x-ui-linux-$(arch).tar.gz
+    if [[ $? -ne 0 ]]; then
+        echo -e "${red}Downloading x-ui failed, please be sure that your server can access GitHub ${plain}"
+        exit 1
+    fi
+    
+    # Stop x-ui service if exists
+    if [[ -e ${xui_folder}/ ]]; then
+        if [[ $release == "alpine" ]]; then
+            rc-service x-ui stop 2>/dev/null
+        else
+            systemctl stop x-ui 2>/dev/null
+        fi
+        rm ${xui_folder}/ -rf
+    fi
+    
+    # Extract resources
+    tar zxvf x-ui-linux-$(arch).tar.gz
+    rm x-ui-linux-$(arch).tar.gz -f
+    
+    cd x-ui
+    chmod +x x-ui
+    
+    # Check architecture and set xray permissions
+    if [[ $(arch) == "armv5" || $(arch) == "armv6" || $(arch) == "armv7" ]]; then
+        mv bin/xray-linux-$(arch) bin/xray-linux-arm
+        chmod +x bin/xray-linux-arm
+    fi
+    chmod +x bin/xray-linux-$(arch)
+    
+    mkdir -p /var/log/x-ui
+    
+    # Create slave systemd service
+    if [[ $release == "alpine" ]]; then
+        echo -e "${red}Alpine Linux is not supported for slave mode yet${plain}"
+        exit 1
+    else
+        echo -e "${green}Creating x-ui-slave systemd service...${plain}"
+        
+        # Convert WebSocket URL for slave
+        slave_ws_url=$(echo "$master_url" | sed 's|^http://|ws://|' | sed 's|^https://|wss://|')
+        slave_ws_url="${slave_ws_url}/panel/api/slave/connect"
+        
+        cat > ${xui_service}/x-ui-slave.service <<EOF
+[Unit]
+Description=x-ui Slave Service
+Documentation=https://github.com/MHSanaei/3x-ui
+After=network.target nss-lookup.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=${xui_folder}
+ExecStart=${xui_folder}/x-ui slave ${slave_ws_url} ${slave_secret}
+Restart=on-failure
+RestartPreventExitStatus=23
+RestartSec=10s
+LimitNOFILE=1000000
+
+[Install]
+WantedBy=multi-user.target
+EOF
+        
+        chmod 644 ${xui_service}/x-ui-slave.service
+        systemctl daemon-reload
+        systemctl enable x-ui-slave
+        systemctl start x-ui-slave
+        
+        echo -e "${green}x-ui ${tag_version}${plain} slave installation finished!"
+        echo -e ""
+        echo -e "${blue}Master URL: ${master_url}${plain}"
+        echo -e "${blue}Connection: ${slave_ws_url}${plain}"
+        echo -e ""
+        echo -e "┌───────────────────────────────────────────────────────┐
+│  ${blue}x-ui slave control commands:${plain}                         │
+│                                                       │
+│  ${blue}systemctl start x-ui-slave${plain}   - Start slave          │
+│  ${blue}systemctl stop x-ui-slave${plain}    - Stop slave           │
+│  ${blue}systemctl restart x-ui-slave${plain} - Restart slave        │
+│  ${blue}systemctl status x-ui-slave${plain}  - Check status         │
+│  ${blue}journalctl -u x-ui-slave -f${plain}  - View logs            │
+└───────────────────────────────────────────────────────┘"
+    fi
+}
+
 install_x-ui() {
     cd ${xui_folder%/x-ui}/
     
@@ -956,6 +1059,26 @@ install_x-ui() {
 └───────────────────────────────────────────────────────┘"
 }
 
-echo -e "${green}Running...${plain}"
-install_base
-install_x-ui $1
+# Check if running in slave mode
+if [[ "$1" == "slave" ]]; then
+    if [[ -z "$2" || -z "$3" ]]; then
+        echo -e "${red}Error: Slave mode requires master URL and secret${plain}"
+        echo -e "${yellow}Usage: bash install.sh slave <master_url> <secret>${plain}"
+        echo -e "${yellow}Example: bash install.sh slave http://master-ip:2053 abc123xyz${plain}"
+        exit 1
+    fi
+    
+    MASTER_URL="$2"
+    SLAVE_SECRET="$3"
+    
+    echo -e "${green}Installing x-ui in Slave mode...${plain}"
+    echo -e "${blue}Master URL: ${MASTER_URL}${plain}"
+    echo -e "${blue}Secret: ${SLAVE_SECRET:0:8}...${plain}"
+    
+    install_base
+    install_x-ui_slave "$MASTER_URL" "$SLAVE_SECRET"
+else
+    echo -e "${green}Running...${plain}"
+    install_base
+    install_x-ui $1
+fi

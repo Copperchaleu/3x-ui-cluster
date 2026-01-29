@@ -1,0 +1,23 @@
+FROM alpine:latest
+
+RUN apk add --no-cache ca-certificates tzdata
+
+WORKDIR /app
+
+# 直接复制已编译的二进制文件（需要先在宿主机上编译）
+COPY 3x-ui /app/
+COPY bin/ /app/bin/
+
+# 设置可执行权限
+RUN chmod +x /app/3x-ui
+
+# 创建必要的目录
+RUN mkdir -p /app/log /app/db
+
+# 设置环境变量
+ENV XUI_BIN_FOLDER=/app/bin
+ENV XUI_LOG_FOLDER=/app/log
+ENV XUI_DB_FOLDER=/app/db
+
+# Agent 模式入口点
+ENTRYPOINT ["/app/3x-ui", "agent"]

@@ -1,0 +1,177 @@
+{{ template "page/head_start" .}}
+{{ template "page/head_end" .}}
+
+{{ template "page/body_start" .}}
+<a-layout id="app" v-cloak :class="themeSwitcher.currentTheme + ' slaves-page'">
+  <a-sidebar></a-sidebar>
+  <a-layout id="content-layout">
+    <a-layout-content>
+      <a-spin :spinning="loading" :delay="500" tip='{{ i18n "loading"}}'>
+        <a-card :style="{ marginBottom: '20px' }">
+            <template slot="title">
+                <a-space>
+                    <a-button type="primary" icon="plus" @click="openAddSlave">{{ i18n "pages.slaves.addSlave" }}</a-button>
+                    <a-button icon="reload" @click="getSlaves">{{ i18n "refresh" }}</a-button>
+                </a-space>
+            </template>
+            <a-table :columns="columns" :data-source="slaves" row-key="id" :pagination="false">
+                <template slot="status" slot-scope="text, record">
+                    <a-tag :color="text === 'online' ? 'green' : 'red'">
+                        [[ text === 'online' ? '{{ i18n "online" }}' : '{{ i18n "offline" }}' ]]
+                    </a-tag>
+                </template>
+                <template slot="action" slot-scope="text, record">
+                    <a-space>
+                        <a-button icon="code" size="small" @click="showInstallCommand(record)">Install Cmd</a-button>
+                        <a-popconfirm title='Delete this slave?' @confirm="delSlave(record.id)">
+                            <a-button type="danger" icon="delete" size="small">Delete</a-button>
+                        </a-popconfirm>
+                    </a-space>
+                </template>
+                <template slot="systemStats" slot-scope="text, record">
+                    <span v-if="text">[[ text ]]</span>
+                    <span v-else>-</span>
+                </template>
+            </a-table>
+        </a-card>
+      </a-spin>
+    </a-layout-content>
+  </a-layout>
+
+  <a-modal v-model="addSlaveModal.visible" title='{{ i18n "pages.slaves.addSlave" }}' @ok="addSlave" :confirm-loading="addSlaveModal.loading">
+    <a-form :layout="'vertical'">
+        <a-form-item label='{{ i18n "pages.slaves.name" }}'>
+            <a-input v-model="addSlaveModal.form.name" placeholder="e.g., US-Slave-1"></a-input>
+        </a-form-item>
+        <a-alert message="Installation command will be generated after adding the slave" type="info" show-icon style="margin-top: 12px"></a-alert>
+    </a-form>
+  </a-modal>
+
+  <a-modal v-model="installModal.visible" title="Slave Installation Command" width="900px" :footer="null">
+    <a-alert type="success" message="Run this command on your slave server to connect it to the master:" style="margin-bottom: 16px"></a-alert>
+    <a-input-group compact style="margin-bottom: 16px">
+      <a-textarea :value="installModal.command" readonly :auto-size="{ minRows: 3, maxRows: 6 }" style="width: calc(100% - 100px)"></a-textarea>
+      <a-button type="primary" @click="copyInstallCommand" style="height: auto">Copy</a-button>
+    </a-input-group>
+    <a-divider></a-divider>
+    <p><strong>Slave Name:</strong> [[ installModal.slaveName ]]</p>
+    <p><strong>Secret Key:</strong> <code>[[ installModal.secret ]]</code></p>
+    <a-alert type="warning" message="Keep the secret key safe. You'll need it if you want to manually configure the slave." show-icon></a-alert>
+  </a-modal>
+</a-layout>
+
+{{ template "page/body_scripts" .}}
+{{ template "component/aSidebar" .}}
+{{ template "component/aThemeSwitch" .}}
+
+<script>
+    new Vue({
+        delimiters: ['[[', ']]'],
+        el: '#app',
+        data: {
+            loading: false,
+            slaves: [],
+            columns: [
+                { title: '{{ i18n "pages.slaves.name" }}', dataIndex: 'name', key: 'name' },
+                { title: '{{ i18n "pages.slaves.status" }}', dataIndex: 'status', scopedSlots: { customRender: 'status' }, width: '100px' },
+                { title: '{{ i18n "pages.slaves.version" }}', dataIndex: 'version', key: 'version', width: '120px' },
+                { title: 'System Stats', dataIndex: 'systemStats', scopedSlots: { customRender: 'systemStats' } },
+                { title: 'Action', key: 'action', scopedSlots: { customRender: 'action' }, width: '200px' }
+            ],
+            addSlaveModal: {
+                visible: false,
+                loading: false,
+                form: {
+                    name: ''
+                }
+            },
+            installModal: {
+                visible: false,
+                command: '',
+                slaveName: '',
+                secret: ''
+            },
+            themeSwitcher: themeSwitcher
+        },
+        mixins: [MediaQueryMixin],
+        mounted() {
+            console.log('Vue app mounted successfully');
+            this.getSlaves();
+        },
+        methods: {
+            getSlaves() {
+                console.log('getSlaves called');
+                this.loading = true;
+                HttpUtil.get('/panel/api/slave/list').then(res => {
+                    if (res.success) {
+                        this.slaves = res.obj;
+                    } else {
+                        this.$message.error(res.msg);
+                    }
+                }).finally(() => {
+                    this.loading = false;
+                });
+            },
+            openAddSlave() {
+                console.log('openAddSlave called');
+                this.addSlaveModal.visible = true;
+                this.addSlaveModal.form = { name: '' };
+            },
+            addSlave() {
+                this.addSlaveModal.loading = true;
+                console.log('Sending slave data:', JSON.stringify(this.addSlaveModal.form));
+                HttpUtil.post('/panel/api/slave/add', this.addSlaveModal.form).then(res => {
+                    console.log('Add slave response:', res);
+                    if (res.success) {
+                        this.$message.success('Slave added successfully');
+                        this.addSlaveModal.visible = false;
+                        this.getSlaves();
+                        // Auto show install command
+                        if (res.obj && res.obj.id) {
+                            this.showInstallCommand(res.obj);
+                        }
+                    } else {
+                        this.$message.error(res.msg || 'Failed to add slave');
+                    }
+                }).catch(err => {
+                    console.error('Add slave error:', err);
+                    this.$message.error('Request failed: ' + (err.message || 'Unknown error'));
+                }).finally(() => {
+                    this.addSlaveModal.loading = false;
+                });
+            },
+            showInstallCommand(slave) {
+                HttpUtil.get(`/panel/api/slave/install/${slave.id}`).then(res => {
+                    if (res.success) {
+                        this.installModal.command = res.obj.command;
+                        this.installModal.slaveName = slave.name;
+                        this.installModal.secret = slave.secret;
+                        this.installModal.visible = true;
+                    } else {
+                        this.$message.error(res.msg);
+                    }
+                });
+            },
+            copyInstallCommand() {
+                const textarea = document.createElement('textarea');
+                textarea.value = this.installModal.command;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+                this.$message.success('Command copied to clipboard!');
+            },
+            delSlave(id) {
+                HttpUtil.post(`/panel/api/slave/del/${id}`).then(res => {
+                    if (res.success) {
+                        this.$message.success(res.msg);
+                        this.getSlaves();
+                    } else {
+                        this.$message.error(res.msg);
+                    }
+                });
+            }
+        }
+    });
+</script>
+{{ template "page/body_end" .}}

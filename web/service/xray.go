@@ -105,7 +105,8 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 
 	s.inboundService.AddTraffic(nil, nil)
 
-	inbounds, err := s.inboundService.GetAllInbounds()
+	// Only get inbounds for the local node (NodeId = 0)
+	inbounds, err := s.inboundService.GetInboundsForSlave(0)
 	if err != nil {
 		return nil, err
 	}

@@ -91,6 +91,7 @@
 "dark" = "暗色"
 "ultraDark" = "超暗色"
 "dashboard" = "系统状态"
+"slaves" = "从机管理"
 "inbounds" = "入站列表"
 "settings" = "面板设置"
 "xray" = "Xray 设置"
@@ -164,6 +165,18 @@
 "readDatabaseError" = "读取数据库时出错"
 "getDatabaseError" = "检索数据库时出错"
 "getConfigError" = "检索配置文件时出错"
+
+[pages.slaves]
+"title" = "从机管理"
+"name" = "名称"
+"address" = "地址"
+"port" = "端口"
+"status" = "状态"
+"version" = "版本"
+"lastSeen" = "最后在线"
+"operate" = "操作"
+"addSlave" = "添加从机"
+"master" = "本地服务器 (Master)"
 
 [pages.inbounds]
 "allTimeTraffic" = "累计总流量"

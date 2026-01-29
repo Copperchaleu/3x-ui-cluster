@@ -100,6 +100,7 @@ type Server struct {
 	panel *controller.XUIController
 	api   *controller.APIController
 	ws    *controller.WebSocketController
+	slave *controller.SlaveController
 
 	xrayService    service.XrayService
 	settingService service.SettingService
@@ -269,6 +270,9 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	s.index = controller.NewIndexController(g)
 	s.panel = controller.NewXUIController(g)
 	s.api = controller.NewAPIController(g)
+
+	// Slave Controller (Agent/Slave management)
+	s.slave = controller.NewSlaveController(g.Group("/panel/api/slave"))
 
 	// Initialize WebSocket hub
 	s.wsHub = websocket.NewHub()

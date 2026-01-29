@@ -87,11 +87,13 @@
     // Store Vue instance globally to ensure methods are always accessible
     let inboundModalVueInstance = null;
     
+    window.addEventListener('load', () => {
     inboundModalVueInstance = new Vue({
         delimiters: ['[[', ']]'],
         el: '#inbound-modal',
         data: {
             inModal: inModal,
+            slaves: [],
             delayedStart: false,
             get inbound() {
                 return inModal.inbound;
@@ -130,7 +132,15 @@
                 }
             }
         },
+        mounted() {
+            this.getSlaves();
+        },
         watch: {
+            'inModal.visible'(val) {
+                if (val) {
+                    this.getSlaves();
+                }
+            },
             'inModal.inbound.stream.security'(newVal, oldVal) {
                 // Clear flow when security changes from reality/tls to none
                 if (inModal.inbound.protocol == Protocols.VLESS && !inModal.inbound.canEnableTlsFlow()) {
@@ -153,6 +163,13 @@
             }
         },
         methods: {
+            getSlaves() {
+                HttpUtil.get('/panel/api/slave/list').then(res => {
+                    if (res.success) {
+                        this.slaves = res.obj;
+                    }
+                });
+            },
             streamNetworkChange() {
                 if (!inModal.inbound.canEnableTls()) {
                     this.inModal.inbound.stream.security = 'none';
@@ -293,6 +310,7 @@
                 this.$set(this.inbound.settings, 'testseed', [900, 500, 900, 256]);
             }
         },
+    });
     });
 
 </script>

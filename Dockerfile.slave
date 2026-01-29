@@ -1,0 +1,24 @@
+FROM alpine:latest
+
+RUN apk add --no-cache ca-certificates tzdata
+
+WORKDIR /app
+
+# Copy pre-compiled binary from host
+# Run: go build -o 3x-ui main.go before building this image
+COPY 3x-ui /app/
+COPY bin/ /app/bin/
+
+# Set executable permissions
+RUN chmod +x /app/3x-ui
+
+# Create necessary directories
+RUN mkdir -p /app/log /app/db
+
+# Set environment variables
+ENV XUI_BIN_FOLDER=/app/bin
+ENV XUI_LOG_FOLDER=/app/log
+ENV XUI_DB_FOLDER=/app/db
+
+# Slave mode entrypoint
+ENTRYPOINT ["/app/3x-ui", "slave"]

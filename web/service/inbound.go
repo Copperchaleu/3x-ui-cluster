@@ -66,6 +66,23 @@ func (s *InboundService) GetAllInbounds() ([]*model.Inbound, error) {
 	if err != nil && err != gorm.ErrRecordNotFound {
 		return nil, err
 	}
+	s.enrichInbounds(inbounds)
+	return inbounds, nil
+}
+
+// GetInboundsForSlave retrieves inbounds for a specific slave/server.
+func (s *InboundService) GetInboundsForSlave(slaveId int) ([]*model.Inbound, error) {
+	db := database.GetDB()
+	var inbounds []*model.Inbound
+	err := db.Model(model.Inbound{}).Preload("ClientStats").Where("slave_id = ?", slaveId).Find(&inbounds).Error
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return nil, err
+	}
+	s.enrichInbounds(inbounds)
+	return inbounds, nil
+}
+
+func (s *InboundService) enrichInbounds(inbounds []*model.Inbound) {
 	// Enrich client stats with UUID/SubId from inbound settings
 	for _, inbound := range inbounds {
 		clients, _ := s.GetClients(inbound)
@@ -84,7 +101,6 @@ func (s *InboundService) GetAllInbounds() ([]*model.Inbound, error) {
 			}
 		}
 	}
-	return inbounds, nil
 }
 
 func (s *InboundService) GetInboundsByTrafficReset(period string) ([]*model.Inbound, error) {
@@ -476,6 +492,7 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 	oldInbound.Enable = inbound.Enable
 	oldInbound.ExpiryTime = inbound.ExpiryTime
 	oldInbound.TrafficReset = inbound.TrafficReset
+	oldInbound.SlaveId = inbound.SlaveId
 	oldInbound.Listen = inbound.Listen
 	oldInbound.Port = inbound.Port
 	oldInbound.Protocol = inbound.Protocol

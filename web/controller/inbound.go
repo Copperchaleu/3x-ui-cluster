@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/mhsanaei/3x-ui/v2/database/model"
+	"github.com/mhsanaei/3x-ui/v2/logger"
 	"github.com/mhsanaei/3x-ui/v2/web/service"
 	"github.com/mhsanaei/3x-ui/v2/web/session"
 	"github.com/mhsanaei/3x-ui/v2/web/websocket"
@@ -17,6 +18,7 @@ import (
 type InboundController struct {
 	inboundService service.InboundService
 	xrayService    service.XrayService
+	slaveService   service.SlaveService
 }
 
 // NewInboundController creates a new InboundController and sets up its routes.
@@ -126,6 +128,9 @@ func (a *InboundController) addInbound(c *gin.Context) {
 	if needRestart {
 		a.xrayService.SetToNeedRestart()
 	}
+	if inbound.SlaveId > 0 {
+		a.slaveService.PushConfig(inbound.SlaveId)
+	}
 	// Broadcast inbounds update via WebSocket
 	inbounds, _ := a.inboundService.GetInbounds(user.Id)
 	websocket.BroadcastInbounds(inbounds)
@@ -138,6 +143,10 @@ func (a *InboundController) delInbound(c *gin.Context) {
 		jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.inboundDeleteSuccess"), err)
 		return
 	}
+    
+    // Get inbound info before deletion to handle slave notification
+    inbound, _ := a.inboundService.GetInbound(id)
+    
 	needRestart, err := a.inboundService.DelInbound(id)
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
@@ -147,6 +156,12 @@ func (a *InboundController) delInbound(c *gin.Context) {
 	if needRestart {
 		a.xrayService.SetToNeedRestart()
 	}
+    
+    // Push config to slave if deleted inbound belonged to one
+    if inbound != nil && inbound.SlaveId > 0 {
+        a.slaveService.PushConfig(inbound.SlaveId)
+    }
+
 	// Broadcast inbounds update via WebSocket
 	user := session.GetLoginUser(c)
 	inbounds, _ := a.inboundService.GetInbounds(user.Id)
@@ -160,23 +175,44 @@ func (a *InboundController) updateInbound(c *gin.Context) {
 		jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.inboundUpdateSuccess"), err)
 		return
 	}
-	inbound := &model.Inbound{
-		Id: id,
-	}
-	err = c.ShouldBind(inbound)
+	inbound, err := a.inboundService.GetInbound(id)
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.inboundUpdateSuccess"), err)
 		return
 	}
+
+	// Backup original SlaveId for config push comparison
+	originalSlaveId := inbound.SlaveId
+	logger.Infof("Original SlaveId: %d", originalSlaveId)
+
+	err = c.ShouldBindJSON(inbound)
+	if err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.inboundUpdateSuccess"), err)
+		return
+	}
+
+	logger.Infof("New SlaveId after bind: %d", inbound.SlaveId)
+
 	inbound, needRestart, err := a.inboundService.UpdateInbound(inbound)
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
 	jsonMsgObj(c, I18nWeb(c, "pages.inbounds.toasts.inboundUpdateSuccess"), inbound, nil)
+	
 	if needRestart {
 		a.xrayService.SetToNeedRestart()
 	}
+
+	if inbound.SlaveId > 0 {
+		a.slaveService.PushConfig(inbound.SlaveId)
+	}
+
+    // If slave changed, push config to the original slave as well to remove the inbound
+    if originalSlaveId > 0 && originalSlaveId != inbound.SlaveId {
+        a.slaveService.PushConfig(originalSlaveId)
+    }
+
 	// Broadcast inbounds update via WebSocket
 	user := session.GetLoginUser(c)
 	inbounds, _ := a.inboundService.GetInbounds(user.Id)

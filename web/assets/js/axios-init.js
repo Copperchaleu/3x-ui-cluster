@@ -5,10 +5,21 @@ axios.interceptors.request.use(
     (config) => {
         if (config.data instanceof FormData) {
             config.headers['Content-Type'] = 'multipart/form-data';
-        } else {
-            config.data = Qs.stringify(config.data, {
-                arrayFormat: 'repeat',
-            });
+        } else if (config.headers && config.headers['Content-Type'] === 'application/json') {
+            // Explicitly set to JSON, don't stringify
+            // Data will be automatically serialized by axios
+        } else if (typeof config.data === 'object' && config.data !== null) {
+            // Check if this is a simple object that should be sent as JSON
+            // API endpoints under /panel/api/ will use JSON
+            if (config.url && config.url.includes('/panel/api/')) {
+                config.headers['Content-Type'] = 'application/json';
+                // axios will automatically JSON.stringify the data
+            } else {
+                // Use form-urlencoded for other endpoints
+                config.data = Qs.stringify(config.data, {
+                    arrayFormat: 'repeat',
+                });
+            }
         }
         return config;
     },

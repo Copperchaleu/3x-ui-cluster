@@ -8,12 +8,14 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	_ "unsafe"
 
 	"github.com/mhsanaei/3x-ui/v2/config"
 	"github.com/mhsanaei/3x-ui/v2/database"
 	"github.com/mhsanaei/3x-ui/v2/logger"
+    "github.com/mhsanaei/3x-ui/v2/slave"
 	"github.com/mhsanaei/3x-ui/v2/sub"
 	"github.com/mhsanaei/3x-ui/v2/util/crypto"
 	"github.com/mhsanaei/3x-ui/v2/web"
@@ -408,6 +410,11 @@ func main() {
 	runCmd := flag.NewFlagSet("run", flag.ExitOnError)
 
 	settingCmd := flag.NewFlagSet("setting", flag.ExitOnError)
+
+    slaveCmd := flag.NewFlagSet("slave", flag.ExitOnError)
+    masterUrl := slaveCmd.String("master", "", "Master Server URL")
+    slaveSecret := slaveCmd.String("secret", "", "Slave Secret")
+
 	var port int
 	var username string
 	var password string
@@ -465,6 +472,37 @@ func main() {
 			return
 		}
 		runWebServer()
+    case "slave":
+        // Initialize logger for slave mode
+        logger.InitLogger(logging.INFO)
+        
+        // Support both positional arguments and flags
+        // Usage: 3x-ui slave <master_url> <secret>
+        // Or: 3x-ui slave --master <url> --secret <key>
+        var masterUrlVal, secretVal string
+        
+        if len(os.Args) >= 4 && !strings.HasPrefix(os.Args[2], "-") {
+            // Positional arguments
+            masterUrlVal = os.Args[2]
+            secretVal = os.Args[3]
+        } else {
+            // Flag arguments
+            err := slaveCmd.Parse(os.Args[2:])
+            if err != nil {
+                fmt.Println(err)
+                return
+            }
+            masterUrlVal = *masterUrl
+            secretVal = *slaveSecret
+        }
+        
+        if masterUrlVal == "" || secretVal == "" {
+            fmt.Println("Error: master URL and secret are required for slave mode")
+            fmt.Println("Usage: 3x-ui slave <master_url> <secret>")
+            fmt.Println("   Or: 3x-ui slave --master <url> --secret <key>")
+            return
+        }
+        slave.Run(masterUrlVal, secretVal)
 	case "migrate":
 		migrateDb()
 	case "setting":

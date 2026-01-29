@@ -91,6 +91,7 @@
 "dark" = "Dark"
 "ultraDark" = "Ultra Dark"
 "dashboard" = "Overview"
+"slaves" = "Slaves"
 "inbounds" = "Inbounds"
 "settings" = "Panel Settings"
 "xray" = "Xray Configs"
@@ -164,6 +165,18 @@
 "readDatabaseError" = "An error occurred while reading the database."
 "getDatabaseError" = "An error occurred while retrieving the database."
 "getConfigError" = "An error occurred while retrieving the config file."
+
+[pages.slaves]
+"title" = "Slave Management"
+"name" = "Name"
+"address" = "Address"
+"port" = "Port"
+"status" = "Status"
+"version" = "Version"
+"lastSeen" = "Last Seen"
+"operate" = "Action"
+"addSlave" = "Add Slave"
+"master" = "Local Server (Master)"
 
 [pages.inbounds]
 "allTimeTraffic" = "All-time Traffic"

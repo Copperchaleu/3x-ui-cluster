@@ -32,6 +32,7 @@ const (
 func initModels() error {
 	models := []any{
 		&model.User{},
+		&model.Slave{},
 		&model.Inbound{},
 		&model.OutboundTraffics{},
 		&model.Setting{},
@@ -142,6 +143,22 @@ func InitDB(dbPath string) error {
 	if err != nil {
 		return err
 	}
+
+    // Migration: Rename nodes table to slaves if exists
+    if db.Migrator().HasTable("nodes") && !db.Migrator().HasTable("slaves") {
+        log.Println("Migrating nodes table to slaves...")
+        if err := db.Migrator().RenameTable("nodes", "slaves"); err != nil {
+            log.Printf("Failed to rename nodes table: %v", err)
+        }
+    }
+    
+    // Migration: Rename node_id column in inbounds to slave_id
+    if db.Migrator().HasTable("inbounds") && db.Migrator().HasColumn(&model.Inbound{}, "node_id") {
+        log.Println("Migrating inbounds.node_id to slave_id...")
+        if err := db.Migrator().RenameColumn(&model.Inbound{}, "node_id", "slave_id"); err != nil {
+             log.Printf("Failed to rename node_id column: %v", err)
+        }
+    }
 
 	if err := initModels(); err != nil {
 		return err

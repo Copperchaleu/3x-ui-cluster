@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  # Slave 1
+  slave1:
+    build:
+      context: .
+      dockerfile: Dockerfile.slave
+    container_name: 3x-ui-slave1
+    hostname: slave1
+    command: ["ws://host.docker.internal:2053/panel/api/slave/connect", "REPLACE_WITH_SECRET_1"]
+    volumes:
+      - slave1_data:/app/db
+      - slave1_logs:/app/log
+    restart: unless-stopped
+    networks:
+      - slave-network
+
+  # Slave 2
+  slave2:
+    build:
+      context: .
+      dockerfile: Dockerfile.slave
+    container_name: 3x-ui-slave2
+    hostname: slave2
+    command: ["ws://host.docker.internal:2053/panel/api/slave/connect", "REPLACE_WITH_SECRET_2"]
+    volumes:
+      - slave2_data:/app/db
+      - slave2_logs:/app/log
+    restart: unless-stopped
+    networks:
+      - slave-network
+
+  # Slave 3
+  slave3:
+    build:
+      context: .
+      dockerfile: Dockerfile.slave
+    container_name: 3x-ui-slave3
+    hostname: slave3
+    command: ["ws://host.docker.internal:2053/panel/api/slave/connect", "REPLACE_WITH_SECRET_3"]
+    volumes:
+      - slave3_data:/app/db
+      - slave3_logs:/app/log
+    restart: unless-stopped
+    networks:
+      - slave-network
+
+volumes:
+  slave1_data:
+  slave1_logs:
+  slave2_data:
+  slave2_logs:
+  slave3_data:
+  slave3_logs:
+
+networks:
+  slave-network:
+    driver: bridge
