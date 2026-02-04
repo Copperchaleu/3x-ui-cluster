@@ -37,6 +37,8 @@ func initModels() error {
 		&model.OutboundTraffics{},
 		&model.Setting{},
 		&model.InboundClientIps{},
+		&model.XrayOutbound{},
+		&model.XrayRoutingRule{},
 		&xray.ClientTraffic{},
 		&model.HistoryOfSeeders{},
 	}
@@ -158,6 +160,24 @@ func InitDB(dbPath string) error {
         if err := db.Migrator().RenameColumn(&model.Inbound{}, "node_id", "slave_id"); err != nil {
              log.Printf("Failed to rename node_id column: %v", err)
         }
+    }
+
+    // Migration: Check for records with SlaveId=0 (Master node) and warn user
+    // Master node no longer runs Xray, all configs must be assigned to actual slaves
+    log.Println("Checking for configurations assigned to Master (SlaveId=0)...")
+    var masterInbounds, masterOutbounds, masterRoutes int64
+    db.Model(&model.Inbound{}).Where("slave_id = 0").Count(&masterInbounds)
+    db.Model(&model.XrayOutbound{}).Where("slave_id = 0").Count(&masterOutbounds)
+    db.Model(&model.XrayRoutingRule{}).Where("slave_id = 0").Count(&masterRoutes)
+    
+    if masterInbounds > 0 || masterOutbounds > 0 || masterRoutes > 0 {
+        log.Println("⚠️  WARNING: Found configurations assigned to Master node (SlaveId=0)")
+        log.Printf("   - Inbounds: %d", masterInbounds)
+        log.Printf("   - Outbounds: %d", masterOutbounds)
+        log.Printf("   - Routing Rules: %d", masterRoutes)
+        log.Println("   Master node no longer runs Xray proxy.")
+        log.Println("   Please add a Slave server and reassign these configurations via the web panel.")
+        log.Println("   Or run `DELETE FROM inbounds WHERE slave_id=0; DELETE FROM xray_outbounds WHERE slave_id=0; DELETE FROM xray_routing_rules WHERE slave_id=0;` to remove them.")
     }
 
 	if err := initModels(); err != nil {

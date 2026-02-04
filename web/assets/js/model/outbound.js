@@ -714,6 +714,7 @@ class Outbound extends CommonClass {
         streamSettings = new StreamSettings(),
         sendThrough,
         mux = new Mux(),
+        slaveId = null,  // Changed from 0 to null - user must select a slave
     ) {
         super();
         this.tag = tag;
@@ -722,6 +723,7 @@ class Outbound extends CommonClass {
         this.stream = streamSettings;
         this.sendThrough = sendThrough;
         this.mux = mux;
+        this.slaveId = slaveId;
     }
 
     get protocol() {
@@ -817,6 +819,7 @@ class Outbound extends CommonClass {
             StreamSettings.fromJson(json.streamSettings),
             json.sendThrough,
             Mux.fromJson(json.mux),
+            json.slaveId,
         )
     }
 
@@ -832,11 +835,12 @@ class Outbound extends CommonClass {
         return {
             protocol: this.protocol,
             settings: settingsOut,
-            // Only include tag, streamSettings, sendThrough, mux if present and not empty
+            // Only include tag, streamSettings, sendThrough, mux, slaveId if present and not empty
             ...(this.tag ? { tag: this.tag } : {}),
             ...(stream ? { streamSettings: stream } : {}),
             ...(this.sendThrough ? { sendThrough: this.sendThrough } : {}),
             ...(this.mux?.enabled ? { mux: this.mux } : {}),
+            ...(this.slaveId !== undefined ? { slaveId: this.slaveId } : {}),
         };
     }
 

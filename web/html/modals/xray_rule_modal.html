@@ -219,6 +219,7 @@
       rule = {};
       newRule = {};
       rule.type = "field";
+      rule.slaveId = app.selectedSlaveId;  // Use the selected slave from page context
       rule.domain = value.domain.length > 0 ? value.domain.split(',') : [];
       rule.ip = value.ip.length > 0 ? value.ip.split(',') : [];
       rule.port = value.port;

@@ -1,6 +1,10 @@
 {{define "settings/xray/routing"}}
 <a-space direction="vertical" size="middle">
-    <a-button type="primary" icon="plus" @click="addRule">{{ i18n "pages.xray.rules.add" }}</a-button>
+    <a-row>
+        <a-col>
+             <a-button type="primary" icon="plus" @click="addRule">{{ i18n "pages.xray.rules.add" }}</a-button>
+        </a-col>
+    </a-row>
     <a-table-sortable :columns="isMobile ? rulesMobileColumns : rulesColumns" bordered :row-key="r => r.key"
         :data-source="routingRuleData" :scroll="isMobile ? {} : { x: 1000 }" :pagination="false" :indent-size="0"
         v-on:onSort="replaceRule">
@@ -64,6 +68,9 @@
                 </template>
                 [[ rule.balancerTag ]]
             </a-popover>
+        </template>
+        <template slot="server" slot-scope="text, rule, index">
+            <a-tag :style="{ margin: '0' }" color="blue">[[ getSlaveName(rule.slaveId) ]]</a-tag>
         </template>
         <template slot="info" slot-scope="text, rule, index">
             <a-popover placement="bottomRight"

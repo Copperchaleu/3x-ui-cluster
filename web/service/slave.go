@@ -14,7 +14,7 @@ import (
 )
 
 type SlaveService struct {
-	inboundService InboundService
+	InboundService InboundService
 }
 
 // In-memory store for active connections
@@ -44,14 +44,47 @@ func (s *SlaveService) RemoveSlaveConn(slaveId int) {
 }
 
 func (s *SlaveService) PushConfig(slaveId int) error {
-	inbounds, err := s.inboundService.GetInboundsForSlave(slaveId)
+	inbounds, err := s.InboundService.GetInboundsForSlave(slaveId)
 	if err != nil {
 		return err
 	}
 
+	// Fetch Outbounds and Routing Rules
+	outboundService := &OutboundService{}
+	outbounds, err := outboundService.GetOutbounds(slaveId)
+	if err != nil {
+		return err
+	}
+
+	routingService := &RoutingService{}
+	routingRules, err := routingService.GetRoutingRules(slaveId)
+	if err != nil {
+		return err
+	}
+
+	// Helper to convert to map for JSON marshaling if needed, 
+    // or rely on model struct json tags if they match Xray config format.
+    // However, model XrayOutbound has JSON strings. We need to parse them or send them as is and let Slave parse?
+    // Slave expects ready-to-use config or raw?
+    // If Slave is another 3x-ui instance running in slave mode, we need to check what it expects.
+    // Assuming we send "outbounds" and "routingRules" arrays.
+
+    // We need to convert our DB models to Xray Config structures
+    xrayOutbounds := make([]interface{}, 0)
+    for _, o := range outbounds {
+        xrayOutbounds = append(xrayOutbounds, o.GenXrayOutboundConfig())
+    }
+
+    xrayRoutingRules := make([]interface{}, 0)
+    for _, r := range routingRules {
+        xrayRoutingRules = append(xrayRoutingRules, r.GenXrayRoutingRuleConfig())
+    }
+
 	data, err := json.Marshal(map[string]interface{}{
-		"type":     "update_config",
-		"inbounds": inbounds,
+		"type":         "update_config",
+		"inbounds":     inbounds,
+		"outbounds":    xrayOutbounds,
+		"routingRules": xrayRoutingRules,
 	})
 	if err != nil {
 		return err

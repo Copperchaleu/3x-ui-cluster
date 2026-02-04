@@ -1,7 +1,6 @@
 package service
 
 import (
-	"encoding/json"
 	"errors"
 	"runtime"
 	"sync"
@@ -90,109 +89,11 @@ func RemoveIndex(s []any, index int) []any {
 	return append(s[:index], s[index+1:]...)
 }
 
-// GetXrayConfig retrieves and builds the Xray configuration from settings and inbounds.
+// GetXrayConfig is deprecated - Master node no longer runs Xray.
+// All proxy functionality should be handled by Slave nodes.
 func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
-	templateConfig, err := s.settingService.GetXrayConfigTemplate()
-	if err != nil {
-		return nil, err
-	}
-
-	xrayConfig := &xray.Config{}
-	err = json.Unmarshal([]byte(templateConfig), xrayConfig)
-	if err != nil {
-		return nil, err
-	}
-
-	s.inboundService.AddTraffic(nil, nil)
-
-	// Only get inbounds for the local node (NodeId = 0)
-	inbounds, err := s.inboundService.GetInboundsForSlave(0)
-	if err != nil {
-		return nil, err
-	}
-	for _, inbound := range inbounds {
-		if !inbound.Enable {
-			continue
-		}
-		// get settings clients
-		settings := map[string]any{}
-		json.Unmarshal([]byte(inbound.Settings), &settings)
-		clients, ok := settings["clients"].([]any)
-		if ok {
-			// check users active or not
-			clientStats := inbound.ClientStats
-			for _, clientTraffic := range clientStats {
-				indexDecrease := 0
-				for index, client := range clients {
-					c := client.(map[string]any)
-					if c["email"] == clientTraffic.Email {
-						if !clientTraffic.Enable {
-							clients = RemoveIndex(clients, index-indexDecrease)
-							indexDecrease++
-							logger.Infof("Remove Inbound User %s due to expiration or traffic limit", c["email"])
-						}
-					}
-				}
-			}
-
-			// clear client config for additional parameters
-			var final_clients []any
-			for _, client := range clients {
-				c := client.(map[string]any)
-				if c["enable"] != nil {
-					if enable, ok := c["enable"].(bool); ok && !enable {
-						continue
-					}
-				}
-				for key := range c {
-					if key != "email" && key != "id" && key != "password" && key != "flow" && key != "method" {
-						delete(c, key)
-					}
-					if c["flow"] == "xtls-rprx-vision-udp443" {
-						c["flow"] = "xtls-rprx-vision"
-					}
-				}
-				final_clients = append(final_clients, any(c))
-			}
-
-			settings["clients"] = final_clients
-			modifiedSettings, err := json.MarshalIndent(settings, "", "  ")
-			if err != nil {
-				return nil, err
-			}
-
-			inbound.Settings = string(modifiedSettings)
-		}
-
-		if len(inbound.StreamSettings) > 0 {
-			// Unmarshal stream JSON
-			var stream map[string]any
-			json.Unmarshal([]byte(inbound.StreamSettings), &stream)
-
-			// Remove the "settings" field under "tlsSettings" and "realitySettings"
-			tlsSettings, ok1 := stream["tlsSettings"].(map[string]any)
-			realitySettings, ok2 := stream["realitySettings"].(map[string]any)
-			if ok1 || ok2 {
-				if ok1 {
-					delete(tlsSettings, "settings")
-				} else if ok2 {
-					delete(realitySettings, "settings")
-				}
-			}
-
-			delete(stream, "externalProxy")
-
-			newStream, err := json.MarshalIndent(stream, "", "  ")
-			if err != nil {
-				return nil, err
-			}
-			inbound.StreamSettings = string(newStream)
-		}
-
-		inboundConfig := inbound.GenXrayInboundConfig()
-		xrayConfig.InboundConfigs = append(xrayConfig.InboundConfigs, *inboundConfig)
-	}
-	return xrayConfig, nil
+	// Master node doesn't run Xray anymore
+	return nil, errors.New("Master node does not run Xray. Please use Slave nodes for proxy functionality")
 }
 
 // GetXrayTraffic fetches the current traffic statistics from the running Xray process.
@@ -214,59 +115,35 @@ func (s *XrayService) GetXrayTraffic() ([]*xray.Traffic, []*xray.ClientTraffic, 
 	return traffic, clientTraffic, nil
 }
 
-// RestartXray restarts the Xray process, optionally forcing a restart even if config unchanged.
+// RestartXray is deprecated - Master node no longer runs Xray.
+// Configuration changes are automatically pushed to Slave nodes.
 func (s *XrayService) RestartXray(isForce bool) error {
-	lock.Lock()
-	defer lock.Unlock()
-	logger.Debug("restart Xray, force:", isForce)
-	isManuallyStopped.Store(false)
-
-	xrayConfig, err := s.GetXrayConfig()
-	if err != nil {
-		return err
-	}
-
-	if s.IsXrayRunning() {
-		if !isForce && p.GetConfig().Equals(xrayConfig) && !isNeedXrayRestart.Load() {
-			logger.Debug("It does not need to restart Xray")
-			return nil
-		}
-		p.Stop()
-	}
-
-	p = xray.NewProcess(xrayConfig)
-	result = ""
-	err = p.Start()
-	if err != nil {
-		return err
-	}
-
+	logger.Info("RestartXray called on Master - this is a no-op. Xray runs only on Slave nodes.")
+	// Master doesn't run Xray, so this is effectively a no-op
+	// Configuration updates are pushed to slaves automatically
 	return nil
 }
 
-// StopXray stops the running Xray process.
+// StopXray is deprecated - Master node no longer runs Xray.
 func (s *XrayService) StopXray() error {
-	lock.Lock()
-	defer lock.Unlock()
-	isManuallyStopped.Store(true)
-	logger.Debug("Attempting to stop Xray...")
-	if s.IsXrayRunning() {
-		return p.Stop()
-	}
-	return errors.New("xray is not running")
+	logger.Info("StopXray called on Master - this is a no-op. Xray runs only on Slave nodes.")
+	return nil
 }
 
-// SetToNeedRestart marks that Xray needs to be restarted.
+// SetToNeedRestart is deprecated - Master node no longer runs Xray.
 func (s *XrayService) SetToNeedRestart() {
-	isNeedXrayRestart.Store(true)
+	logger.Debug("SetToNeedRestart called on Master - this is a no-op")
+	// Master doesn't run Xray, no restart flag needed
 }
 
-// IsNeedRestartAndSetFalse checks if restart is needed and resets the flag to false.
+// IsNeedRestartAndSetFalse is deprecated - Master node no longer runs Xray.
 func (s *XrayService) IsNeedRestartAndSetFalse() bool {
-	return isNeedXrayRestart.CompareAndSwap(true, false)
+	logger.Debug("IsNeedRestartAndSetFalse called on Master - always returns false")
+	return false // Master doesn't run Xray
 }
 
-// DidXrayCrash checks if Xray crashed by verifying it's not running and wasn't manually stopped.
+// DidXrayCrash is deprecated - Master node no longer runs Xray.
 func (s *XrayService) DidXrayCrash() bool {
-	return !s.IsXrayRunning() && !isManuallyStopped.Load()
+	logger.Debug("DidXrayCrash called on Master - always returns false")
+	return false // Master doesn't run Xray, can't crash
 }

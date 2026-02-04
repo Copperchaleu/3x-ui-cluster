@@ -167,7 +167,7 @@
 "getConfigError" = "检索配置文件时出错"
 
 [pages.slaves]
-"title" = "从机管理"
+"title" = "从机"
 "name" = "名称"
 "address" = "地址"
 "port" = "端口"

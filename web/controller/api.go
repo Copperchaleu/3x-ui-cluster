@@ -12,14 +12,18 @@ import (
 // APIController handles the main API routes for the 3x-ui panel, including inbounds and server management.
 type APIController struct {
 	BaseController
-	inboundController *InboundController
-	serverController  *ServerController
-	Tgbot             service.Tgbot
+	inboundController  *InboundController
+	outboundController *OutboundController
+	routingController  *RoutingController
+	serverController   *ServerController
+	slaveController    *SlaveController
+	Tgbot              service.Tgbot
+	slaveService       service.SlaveService
 }
 
 // NewAPIController creates a new APIController instance and initializes its routes.
-func NewAPIController(g *gin.RouterGroup) *APIController {
-	a := &APIController{}
+func NewAPIController(g *gin.RouterGroup, slaveService service.SlaveService) *APIController {
+	a := &APIController{slaveService: slaveService}
 	a.initRouter(g)
 	return a
 }
@@ -36,6 +40,10 @@ func (a *APIController) checkAPIAuth(c *gin.Context) {
 
 // initRouter sets up the API routes for inbounds, server, and other endpoints.
 func (a *APIController) initRouter(g *gin.RouterGroup) {
+	// Slave connect without auth
+	slaveController := &SlaveController{slaveService: a.slaveService}
+	g.GET("/panel/api/slave/connect", slaveController.connectSlave)
+
 	// Main API group
 	api := g.Group("/panel/api")
 	api.Use(a.checkAPIAuth)
@@ -43,6 +51,18 @@ func (a *APIController) initRouter(g *gin.RouterGroup) {
 	// Inbounds API
 	inbounds := api.Group("/inbounds")
 	a.inboundController = NewInboundController(inbounds)
+
+	// Outbounds API
+	outbounds := api.Group("/outbounds")
+	a.outboundController = NewOutboundController(outbounds)
+
+	// Routing API
+	routing := api.Group("/routing")
+	a.routingController = NewRoutingController(routing)
+
+	// Slave API
+	slave := api.Group("/slave")
+	a.slaveController = NewSlaveController(slave, a.slaveService)
 
 	// Server API
 	server := api.Group("/server")
