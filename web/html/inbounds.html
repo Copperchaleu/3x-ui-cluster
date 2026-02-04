@@ -269,10 +269,7 @@
                       </template>
                     </template>
                     <template slot="slave" slot-scope="text, dbInbound">
-                      <a-tag v-if="dbInbound.slaveId === 0" color="blue">
-                        {{ i18n "pages.slaves.master" }}
-                      </a-tag>
-                      <a-tag v-else color="green">
+                      <a-tag color="green">
                         [[ getSlaveNameById(dbInbound.slaveId) ]]
                       </a-tag>
                     </template>
@@ -819,9 +816,6 @@
         }
       },
       getSlaveNameById(slaveId) {
-        if (slaveId === 0) {
-          return '{{ i18n "pages.slaves.master" }}';
-        }
         const slave = this.slaves.find(s => s.id === slaveId);
         return slave ? slave.name : `Slave #${slaveId}`;
       },
@@ -1035,6 +1029,11 @@
         });
       },
       async cloneInbound(baseInbound, dbInbound) {
+        // Validate slave selection
+        if (!dbInbound.slaveId || dbInbound.slaveId === 0) {
+          this.$message.error('Cannot clone inbound without valid slave. Please edit the source inbound first.');
+          return;
+        }
         const data = {
           up: dbInbound.up,
           down: dbInbound.down,
@@ -1044,6 +1043,7 @@
           expiryTime: dbInbound.expiryTime,
           trafficReset: dbInbound.trafficReset,
           lastTrafficResetTime: dbInbound.lastTrafficResetTime,
+          slaveId: dbInbound.slaveId,
 
           listen: '',
           port: RandomUtil.randomInteger(10000, 60000),
@@ -1055,6 +1055,10 @@
         await this.submit('/panel/api/inbounds/add', data, inModal);
       },
       openAddInbound() {
+        if (this.slaves.length === 0) {
+          this.$message.error('No slave servers available. Please add a slave server first.');
+          return;
+        }
         inModal.show({
           title: '{{ i18n "pages.inbounds.addInbound"}}',
           okText: '{{ i18n "create"}}',
@@ -1081,6 +1085,11 @@
         });
       },
       async addInbound(inbound, dbInbound) {
+        // Validate slave selection
+        if (!dbInbound.slaveId || dbInbound.slaveId === 0) {
+          this.$message.error('Please select a slave server.');
+          return;
+        }
         const data = {
           up: dbInbound.up,
           down: dbInbound.down,
@@ -1107,6 +1116,11 @@
         await this.submit('/panel/api/inbounds/add', data, inModal);
       },
       async updateInbound(inbound, dbInbound) {
+        // Validate slave selection
+        if (!dbInbound.slaveId || dbInbound.slaveId === 0) {
+          this.$message.error('Please select a slave server.');
+          return;
+        }
         const data = {
           up: dbInbound.up,
           down: dbInbound.down,
@@ -1116,7 +1130,7 @@
           expiryTime: dbInbound.expiryTime,
           trafficReset: dbInbound.trafficReset,
           lastTrafficResetTime: dbInbound.lastTrafficResetTime,
-          slaveId: dbInbound.slaveId || 0,
+          slaveId: dbInbound.slaveId,
 
           listen: inbound.listen,
           port: inbound.port,

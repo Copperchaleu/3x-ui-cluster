@@ -6,6 +6,11 @@
   <a-tab-pane key="1" tab="Form">
     <a-form :colon="false" :label-col="{ md: {span:8} }"
       :wrapper-col="{ md: {span:14} }">
+      <a-form-item label='Server'>
+        <a-select v-model="outbound.slaveId" :dropdown-class-name="themeSwitcher.currentTheme" placeholder="Select a slave server">
+          <a-select-option v-for="s in app.slaves" :key="s.id" :value="s.id">[[ s.name ]]</a-select-option>
+        </a-select>
+      </a-form-item>
       <a-form-item label='{{ i18n "protocol" }}'>
         <a-select v-model="outbound.protocol"
           :dropdown-class-name="themeSwitcher.currentTheme">

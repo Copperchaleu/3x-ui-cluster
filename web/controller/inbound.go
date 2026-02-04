@@ -7,6 +7,7 @@ import (
 
 	"github.com/mhsanaei/3x-ui/v2/database/model"
 	"github.com/mhsanaei/3x-ui/v2/logger"
+	"github.com/mhsanaei/3x-ui/v2/util/common"
 	"github.com/mhsanaei/3x-ui/v2/web/service"
 	"github.com/mhsanaei/3x-ui/v2/web/session"
 	"github.com/mhsanaei/3x-ui/v2/web/websocket"
@@ -111,6 +112,13 @@ func (a *InboundController) addInbound(c *gin.Context) {
 		jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.inboundCreateSuccess"), err)
 		return
 	}
+	
+	// Validate slave selection
+	if inbound.SlaveId <= 0 {
+		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), common.NewError("Please select a valid slave server"))
+		return
+	}
+	
 	user := session.GetLoginUser(c)
 	inbound.UserId = user.Id
 	if inbound.Listen == "" || inbound.Listen == "0.0.0.0" || inbound.Listen == "::" || inbound.Listen == "::0" {
@@ -193,6 +201,12 @@ func (a *InboundController) updateInbound(c *gin.Context) {
 
 	logger.Infof("New SlaveId after bind: %d", inbound.SlaveId)
 
+	// Validate slave selection
+	if inbound.SlaveId <= 0 {
+		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), common.NewError("Please select a valid slave server"))
+		return
+	}
+
 	inbound, needRestart, err := a.inboundService.UpdateInbound(inbound)
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
@@ -262,6 +276,11 @@ func (a *InboundController) addInboundClient(c *gin.Context) {
 	if needRestart {
 		a.xrayService.SetToNeedRestart()
 	}
+	// Push config to slave
+	inbound, _ := a.inboundService.GetInbound(data.Id)
+	if inbound != nil && inbound.SlaveId > 0 {
+		a.slaveService.PushConfig(inbound.SlaveId)
+	}
 }
 
 // delInboundClient deletes a client from an inbound by inbound ID and client ID.
@@ -273,6 +292,9 @@ func (a *InboundController) delInboundClient(c *gin.Context) {
 	}
 	clientId := c.Param("clientId")
 
+	// Get inbound info before deletion
+	inbound, _ := a.inboundService.GetInbound(id)
+
 	needRestart, err := a.inboundService.DelInboundClient(id, clientId)
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
@@ -281,6 +303,10 @@ func (a *InboundController) delInboundClient(c *gin.Context) {
 	jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.inboundClientDeleteSuccess"), nil)
 	if needRestart {
 		a.xrayService.SetToNeedRestart()
+	}
+	// Push config to slave
+	if inbound != nil && inbound.SlaveId > 0 {
+		a.slaveService.PushConfig(inbound.SlaveId)
 	}
 }
 
@@ -304,6 +330,10 @@ func (a *InboundController) updateInboundClient(c *gin.Context) {
 	if needRestart {
 		a.xrayService.SetToNeedRestart()
 	}
+	// Push config to slave
+	if inbound.SlaveId > 0 {
+		a.slaveService.PushConfig(inbound.SlaveId)
+	}
 }
 
 // resetClientTraffic resets the traffic counter for a specific client in an inbound.
@@ -315,6 +345,9 @@ func (a *InboundController) resetClientTraffic(c *gin.Context) {
 	}
 	email := c.Param("email")
 
+	// Get inbound info
+	inbound, _ := a.inboundService.GetInbound(id)
+
 	needRestart, err := a.inboundService.ResetClientTraffic(id, email)
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
@@ -323,6 +356,10 @@ func (a *InboundController) resetClientTraffic(c *gin.Context) {
 	jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.resetInboundClientTrafficSuccess"), nil)
 	if needRestart {
 		a.xrayService.SetToNeedRestart()
+	}
+	// Push config to slave
+	if inbound != nil && inbound.SlaveId > 0 {
+		a.slaveService.PushConfig(inbound.SlaveId)
 	}
 }
 

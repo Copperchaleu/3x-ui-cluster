@@ -3,7 +3,7 @@ class DBInbound {
     constructor(data) {
         this.id = 0;
         this.userId = 0;
-        this.slaveId = 0; // Added
+        this.slaveId = null; // Must be set to a valid slave
         this.up = 0;
         this.down = 0;
         this.total = 0;

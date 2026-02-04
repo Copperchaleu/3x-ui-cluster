@@ -100,11 +100,11 @@ type Server struct {
 	panel *controller.XUIController
 	api   *controller.APIController
 	ws    *controller.WebSocketController
-	slave *controller.SlaveController
 
 	xrayService    service.XrayService
 	settingService service.SettingService
 	tgbotService   service.Tgbot
+	slaveService   service.SlaveService
 
 	wsHub *websocket.Hub
 
@@ -173,6 +173,8 @@ func (s *Server) getHtmlTemplate(funcMap template.FuncMap) (*template.Template, 
 // initRouter initializes Gin, registers middleware, templates, static
 // assets, controllers and returns the configured engine.
 func (s *Server) initRouter() (*gin.Engine, error) {
+	s.slaveService = service.SlaveService{InboundService: service.InboundService{}}
+
 	if config.IsDebug() {
 		gin.SetMode(gin.DebugMode)
 	} else {
@@ -269,10 +271,7 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 
 	s.index = controller.NewIndexController(g)
 	s.panel = controller.NewXUIController(g)
-	s.api = controller.NewAPIController(g)
-
-	// Slave Controller (Agent/Slave management)
-	s.slave = controller.NewSlaveController(g.Group("/panel/api/slave"))
+	s.api = controller.NewAPIController(g, s.slaveService)
 
 	// Initialize WebSocket hub
 	s.wsHub = websocket.NewHub()
@@ -296,29 +295,16 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	return engine, nil
 }
 
-// startTask schedules background jobs (Xray checks, traffic jobs, cron
-// jobs) which the panel relies on for periodic maintenance and monitoring.
+// startTask schedules background jobs (traffic jobs, cron jobs) which 
+// the panel relies on for periodic maintenance and monitoring.
+// Note: Xray is no longer managed by Master - all proxy functionality via Slaves
 func (s *Server) startTask() {
-	err := s.xrayService.RestartXray(true)
-	if err != nil {
-		logger.Warning("start xray failed:", err)
-	}
-	// Check whether xray is running every second
-	s.cron.AddJob("@every 1s", job.NewCheckXrayRunningJob())
-
-	// Check if xray needs to be restarted every 30 seconds
-	s.cron.AddFunc("@every 30s", func() {
-		if s.xrayService.IsNeedRestartAndSetFalse() {
-			err := s.xrayService.RestartXray(false)
-			if err != nil {
-				logger.Error("restart xray failed:", err)
-			}
-		}
-	})
+	// Master is panel-only - no local Xray startup
+	// All Xray operations are handled by slave agents
 
 	go func() {
 		time.Sleep(time.Second * 5)
-		// Statistics every 10 seconds, start the delay for 5 seconds for the first time, and staggered with the time to restart xray
+		// Statistics every 10 seconds for slave traffic monitoring
 		s.cron.AddJob("@every 10s", job.NewXrayTrafficJob())
 	}()
 

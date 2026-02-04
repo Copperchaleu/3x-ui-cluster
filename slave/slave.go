@@ -102,13 +102,23 @@ func (s *Slave) connectAndLoop() {
 
 		if typeStr, ok := msg["type"].(string); ok && typeStr == "update_config" {
 			// Handle Config Update
+			var inbounds []*model.Inbound
 			if inboundsRaw, ok := msg["inbounds"]; ok {
 				data, _ := json.Marshal(inboundsRaw)
-				var inbounds []*model.Inbound
 				json.Unmarshal(data, &inbounds)
-
-				s.applyConfig(inbounds)
 			}
+            
+            var outbounds []interface{}
+            if outboundsRaw, ok := msg["outbounds"]; ok {
+                 outbounds = outboundsRaw.([]interface{})
+            }
+            
+            var routingRules []interface{}
+            if rulesRaw, ok := msg["routingRules"]; ok {
+                 routingRules = rulesRaw.([]interface{})
+            }
+
+			s.applyConfig(inbounds, outbounds, routingRules)
 		}
 	}
 }
@@ -124,7 +134,7 @@ func (s *Slave) collectStats() string {
 	return fmt.Sprintf(`{"cpu": %.2f, "mem": %.2f}`, cpuVal, v.UsedPercent)
 }
 
-func (s *Slave) applyConfig(inbounds []*model.Inbound) {
+func (s *Slave) applyConfig(inbounds []*model.Inbound, outbounds []interface{}, routingRules []interface{}) {
 	logger.Info("Applying new configuration...")
 	xrayConfig := &xray.Config{}
 
@@ -146,6 +156,22 @@ func (s *Slave) applyConfig(inbounds []*model.Inbound) {
     statsCfg := map[string]interface{}{}
     statsBytes, _ := json.Marshal(statsCfg)
 	xrayConfig.Stats = statsBytes
+
+	// Outbounds
+    if len(outbounds) > 0 {
+         outBytes, _ := json.Marshal(outbounds)
+         xrayConfig.OutboundConfigs = outBytes
+    }
+
+	// Routing
+	if len(routingRules) > 0 {
+         routerCfg := map[string]interface{}{
+             "domainStrategy": "AsIs",
+             "rules": routingRules,
+         }
+         routerBytes, _ := json.Marshal(routerCfg)
+         xrayConfig.RouterConfig = routerBytes
+    }
 
     policyCfg := map[string]interface{}{
 		"levels": map[string]interface{}{

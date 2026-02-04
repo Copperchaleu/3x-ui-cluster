@@ -51,7 +51,7 @@ func (Slave) TableName() string {
 type Inbound struct {
 	Id                   int                  `json:"id" form:"id" gorm:"primaryKey;autoIncrement"`                                                    // Unique identifier
 	UserId               int                  `json:"-"`                                                                                               // Associated user ID
-	SlaveId              int                  `json:"slaveId" form:"slaveId" gorm:"default:0"`                                                           // Associated Slave ID (0 = Master)
+	SlaveId              int                  `json:"slaveId" form:"slaveId" gorm:"not null;index"`                                                     // Associated Slave ID (must be a valid slave)
 	Up                   int64                `json:"up" form:"up"`                                                                                    // Upload traffic in bytes
 	Down                 int64                `json:"down" form:"down"`                                                                                // Download traffic in bytes
 	Total                int64                `json:"total" form:"total"`                                                                              // Total traffic limit in bytes

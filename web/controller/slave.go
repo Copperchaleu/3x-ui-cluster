@@ -17,8 +17,8 @@ type SlaveController struct {
 	slaveService service.SlaveService
 }
 
-func NewSlaveController(g *gin.RouterGroup) *SlaveController {
-	s := &SlaveController{}
+func NewSlaveController(g *gin.RouterGroup, slaveService service.SlaveService) *SlaveController {
+	s := &SlaveController{slaveService: slaveService}
 	s.initRouter(g)
 	return s
 }
@@ -28,7 +28,6 @@ func (s *SlaveController) initRouter(g *gin.RouterGroup) {
 	g.POST("/add", s.addSlave)
 	g.POST("/del/:id", s.delSlave)
 	g.GET("/install/:id", s.getInstallCommand)
-    g.GET("/connect", s.connectSlave) 
 }
 
 func (s *SlaveController) getSlaves(c *gin.Context) {
@@ -41,10 +40,6 @@ func (s *SlaveController) getSlaves(c *gin.Context) {
         c.JSON(http.StatusInternalServerError, gin.H{"success": false, "msg": err.Error()})
         return
     }
-	if !session.IsLogin(c) {
-		c.JSON(http.StatusUnauthorized, gin.H{"success": false, "msg": "unauthorized"})
-		return
-	}
     c.JSON(http.StatusOK, gin.H{"success": true, "obj": slaves})
 }
 

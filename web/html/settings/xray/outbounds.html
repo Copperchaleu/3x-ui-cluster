@@ -68,6 +68,9 @@
                     color="green">reality</a-tag>
             </template>
         </template>
+        <template slot="server" slot-scope="text, outbound, index">
+            <a-tag :style="{ margin: '0' }" color="blue">[[ getSlaveName(outbound.slaveId) ]]</a-tag>
+        </template>
         <template slot="traffic" slot-scope="text, outbound, index">
             <a-tag color="green">[[ findOutboundTraffic(outbound) ]]</a-tag>
         </template>

@@ -9,10 +9,9 @@
         <a-input v-model.trim="dbInbound.remark"></a-input>
     </a-form-item>
 
-    <a-form-item label='{{ i18n "pages.slaves.title" }}'>
-        <a-select v-model="dbInbound.slaveId" :dropdown-class-name="themeSwitcher.currentTheme">
-            <a-select-option :value="0">{{ i18n "pages.slaves.master" }}</a-select-option>
-            <a-select-option v-for="n in slaves" :key="n.id" :value="n.id">[[ n.name ]] ([[ n.address ]])</a-select-option>
+    <a-form-item label='{{ i18n "pages.slaves.title" }}' required>
+        <a-select v-model="dbInbound.slaveId" :dropdown-class-name="themeSwitcher.currentTheme" placeholder="Select a slave server">
+            <a-select-option v-for="n in slaves" :key="n.id" :value="n.id">[[ n.name ]]<template v-if="n.address"> ([[ n.address ]])</template></a-select-option>
         </a-select>
     </a-form-item>
 

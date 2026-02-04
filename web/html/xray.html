@@ -26,6 +26,17 @@
           <a-row :gutter="[isMobile ? 8 : 16, isMobile ? 0 : 12]" v-else>
             <a-col>
               <a-card hoverable>
+                <!-- Breadcrumb Navigation -->
+                <a-breadcrumb style="margin-bottom: 16px">
+                  <a-breadcrumb-item><a href="javascript:history.back()">{{ i18n "pages.slaves.title"
+                      }}</a></a-breadcrumb-item>
+                  <a-breadcrumb-item><strong>[[ selectedSlaveName ]]</strong></a-breadcrumb-item>
+                  <a-breadcrumb-item>{{ i18n "pages.xray.title" }}</a-breadcrumb-item>
+                </a-breadcrumb>
+                <!-- Slave Context Indicator -->
+                <a-alert type="info" message="Slave-Specific Configuration"
+                  :description="`All Xray settings on this page apply to: ${selectedSlaveName}`" show-icon
+                  style="margin-bottom: 16px"></a-alert>
                 <a-row :style="{ display: 'flex', flexWrap: 'wrap', alignItems: 'center' }">
                   <a-col :xs="24" :sm="10" :style="{ padding: '4px' }">
                     <a-space direction="horizontal">
@@ -230,6 +241,11 @@
       xraySetting: '',
       inboundTags: [],
       outboundsTraffic: [],
+      slaves: [],
+      selectedSlaveId: null,
+      selectedSlaveName: '',  // Display name for the selected slave
+      dbOutbounds: [],
+      dbRoutingRules: [],
       saveBtnDisable: true,
       refreshing: false,
       restartResult: '',
@@ -556,39 +572,78 @@
         return serverObj ? serverObj.map(obj => obj.address + ':' + obj.port) : null;
       },
       addOutbound() {
+        if (this.slaves.length === 0) {
+          this.$message.error('No slave servers available. Please add a slave server first.');
+          return;
+        }
         outModal.show({
           title: '{{ i18n "pages.xray.outbound.addOutbound"}}',
           okText: '{{ i18n "pages.xray.outbound.addOutbound" }}',
-          confirm: (outbound) => {
+          confirm: async (outbound) => {
             outModal.loading();
-            if (outbound.tag.length > 0) {
-              this.templateSettings.outbounds.push(outbound);
-              this.outboundSettings = JSON.stringify(this.templateSettings.outbounds);
+            if (!outbound.slaveId) {
+              this.$message.error('Please select a slave server.');
+              outModal.loading(false);
+              return;
             }
-            outModal.close();
+            const apiOutbound = { ...outbound };
+            // slaveId already in outbound from form
+            apiOutbound.settings = JSON.stringify(apiOutbound.settings);
+            apiOutbound.streamSettings = JSON.stringify(apiOutbound.streamSettings);
+            apiOutbound.mux = JSON.stringify(apiOutbound.mux);
+            apiOutbound.proxySettings = JSON.stringify(outbound.proxySettings || {});
+
+            const msg = await HttpUtil.post("/panel/api/outbounds/add", apiOutbound);
+            if (msg.success) {
+              await this.getDBOutbounds();
+              outModal.close();
+            } else {
+              outModal.loading(false);
+            }
           },
           isEdit: false,
-          tags: this.templateSettings.outbounds.map(obj => obj.tag)
+          tags: this.dbOutbounds.map(obj => obj.tag)
         });
       },
       editOutbound(index) {
         outModal.show({
           title: '{{ i18n "pages.xray.outbound.editOutbound"}} ' + (index + 1),
-          outbound: app.templateSettings.outbounds[index],
-          confirm: (outbound) => {
+          outbound: this.dbOutbounds[index],
+          confirm: async (newOutbound) => {
             outModal.loading();
-            this.templateSettings.outbounds[index] = outbound;
-            this.outboundSettings = JSON.stringify(this.templateSettings.outbounds);
-            outModal.close();
+            const apiOutbound = { ...this.dbOutbounds[index], ...newOutbound }; // Merge original data with form data
+            // slaveId already in outbound from form
+            apiOutbound.settings = JSON.stringify(apiOutbound.settings);
+            apiOutbound.streamSettings = JSON.stringify(apiOutbound.streamSettings);
+            apiOutbound.mux = JSON.stringify(apiOutbound.mux);
+            apiOutbound.proxySettings = JSON.stringify(apiOutbound.proxySettings || {});
+
+            const msg = await HttpUtil.post("/panel/api/outbounds/update", apiOutbound);
+            if (msg.success) {
+              await this.getDBOutbounds();
+              outModal.close();
+            } else {
+              outModal.loading(false);
+            }
           },
           isEdit: true,
-          tags: this.outboundData.filter((o) => o.key != index).map(obj => obj.tag)
+          tags: this.dbOutbounds.filter((o, i) => i != index).map(obj => obj.tag)
         });
       },
       deleteOutbound(index) {
-        outbounds = this.templateSettings.outbounds;
-        outbounds.splice(index, 1);
-        this.outboundSettings = JSON.stringify(outbounds);
+        const outbound = this.dbOutbounds[index];
+        this.$confirm({
+          title: '{{ i18n "pages.xray.outbound.deleteOutbound"}}',
+          content: '{{ i18n "pages.xray.outbound.deleteOutboundContent"}}',
+          okText: '{{ i18n "sure"}}',
+          cancelText: '{{ i18n "cancel"}}',
+          onOk: async () => {
+            const msg = await HttpUtil.post("/panel/api/outbounds/del/" + outbound.id);
+            if (msg.success) {
+              await this.getDBOutbounds();
+            }
+          }
+        });
       },
       setFirstOutbound(index) {
         outbounds = this.templateSettings.outbounds;
@@ -920,13 +975,25 @@
         ruleModal.show({
           title: '{{ i18n "pages.xray.rules.add"}}',
           okText: '{{ i18n "pages.xray.rules.add" }}',
-          confirm: (rule) => {
+          confirm: async (rule) => {
             ruleModal.loading();
-            if (JSON.stringify(rule).length > 3) {
-              this.templateSettings.routing.rules.push(rule);
-              this.routingRuleSettings = JSON.stringify(this.templateSettings.routing.rules);
+            const apiRule = { ...rule };
+            // slaveId already in rule from getResult()
+            apiRule.domain = JSON.stringify(apiRule.domain);
+            apiRule.ip = JSON.stringify(apiRule.ip);
+            apiRule.source = JSON.stringify(apiRule.source);
+            apiRule.user = JSON.stringify(apiRule.user);
+            apiRule.inboundTag = JSON.stringify(apiRule.inboundTag);
+            apiRule.protocol = JSON.stringify(apiRule.protocol);
+            // apiRule.attrs = JSON.stringify(apiRule.attrs);
+
+            const msg = await HttpUtil.post("/panel/api/routing/add", apiRule);
+            if (msg.success) {
+              await this.getDBRoutingRules();
+              ruleModal.close();
+            } else {
+              ruleModal.loading(false);
             }
-            ruleModal.close();
           },
           isEdit: false
         });
@@ -934,49 +1001,135 @@
       editRule(index) {
         ruleModal.show({
           title: '{{ i18n "pages.xray.rules.edit"}} ' + (index + 1),
-          rule: app.templateSettings.routing.rules[index],
-          confirm: (rule) => {
+          rule: this.dbRoutingRules[index],
+          confirm: async (rule) => {
             ruleModal.loading();
-            if (JSON.stringify(rule).length > 3) {
-              this.templateSettings.routing.rules[index] = rule;
-              this.routingRuleSettings = JSON.stringify(this.templateSettings.routing.rules);
+            const apiRule = { ...this.dbRoutingRules[index], ...rule }; // Merge original data with form data
+            // slaveId already in rule from getResult()
+            apiRule.domain = JSON.stringify(apiRule.domain);
+            apiRule.ip = JSON.stringify(apiRule.ip);
+            apiRule.source = JSON.stringify(apiRule.source);
+            apiRule.user = JSON.stringify(apiRule.user);
+            apiRule.inboundTag = JSON.stringify(apiRule.inboundTag);
+            apiRule.protocol = JSON.stringify(apiRule.protocol);
+
+            const msg = await HttpUtil.post("/panel/api/routing/update", apiRule);
+            if (msg.success) {
+              await this.getDBRoutingRules();
+              ruleModal.close();
+            } else {
+              ruleModal.loading(false);
             }
-            ruleModal.close();
           },
           isEdit: true
         });
       },
       replaceRule(old_index, new_index) {
-        rules = this.templateSettings.routing.rules;
-        if (new_index >= rules.length) rules.push(undefined);
-        rules.splice(new_index, 0, rules.splice(old_index, 1)[0]);
-        this.routingRuleSettings = JSON.stringify(rules);
+        // rules = this.templateSettings.routing.rules;
+        // if (new_index >= rules.length) rules.push(undefined);
+        // rules.splice(new_index, 0, rules.splice(old_index, 1)[0]);
+        // this.routingRuleSettings = JSON.stringify(rules);
+        console.log("Sorting not implemented yet in DB mode");
       },
       deleteRule(index) {
-        rules = this.templateSettings.routing.rules;
-        rules.splice(index, 1);
-        this.routingRuleSettings = JSON.stringify(rules);
+        const rule = this.dbRoutingRules[index];
+        this.$confirm({
+          title: '{{ i18n "pages.xray.rules.deleteRule"}}',
+          content: '{{ i18n "pages.xray.rules.deleteRuleContent"}}',
+          okText: '{{ i18n "sure"}}',
+          cancelText: '{{ i18n "cancel"}}',
+          onOk: async () => {
+            const msg = await HttpUtil.post("/panel/api/routing/del/" + rule.id);
+            if (msg.success) {
+              await this.getDBRoutingRules();
+            }
+          }
+        });
+      },
+      async getSlaves() {
+        const msg = await HttpUtil.get("/panel/api/slave/list");
+        if (msg.success) {
+          this.slaves = msg.obj;
+        }
+      },
+      async getDBOutbounds() {
+        const msg = await HttpUtil.post("/panel/api/outbounds/list");
+        if (msg.success) {
+          this.dbOutbounds = msg.obj.map(o => {
+            return {
+              ...o,
+              settings: o.settings ? JSON.parse(o.settings) : {},
+              streamSettings: o.streamSettings ? JSON.parse(o.streamSettings) : {},
+              mux: o.mux ? JSON.parse(o.mux) : {},
+              proxySettings: o.proxySettings ? JSON.parse(o.proxySettings) : {}
+            };
+          });
+        }
+      },
+      async getDBRoutingRules() {
+        const msg = await HttpUtil.post("/panel/api/routing/list");
+        if (msg.success) {
+          this.dbRoutingRules = msg.obj.map(r => {
+            return {
+              ...r,
+              domain: r.domain ? JSON.parse(r.domain) : [],
+              ip: r.ip ? JSON.parse(r.ip) : [],
+              source: r.source ? JSON.parse(r.source) : [],
+              user: r.user ? JSON.parse(r.user) : [],
+              inboundTag: r.inboundTag ? JSON.parse(r.inboundTag) : [],
+              protocol: r.protocol ? JSON.parse(r.protocol) : []
+            };
+          });
+        }
+      },
+      async refreshDBData() {
+        this.loadingStates.spinning = true;
+        await this.getDBOutbounds();
+        await this.getDBRoutingRules();
+        this.loadingStates.spinning = false;
       },
       showWarp() {
         warpModal.show();
+      },
+      getSlaveName(slaveId) {
+        const slave = this.slaves.find(s => s.id === slaveId);
+        return slave ? slave.name : 'Unknown Slave';
       }
     },
     async mounted() {
+      // Extract slaveId and slaveName from URL query parameters
+      const urlParams = new URLSearchParams(window.location.search);
+      const slaveIdParam = urlParams.get('slaveId');
+      const slaveNameParam = urlParams.get('slaveName');
+
+      if (slaveIdParam !== null) {
+        this.selectedSlaveId = parseInt(slaveIdParam);
+        if (slaveNameParam) {
+          this.selectedSlaveName = decodeURIComponent(slaveNameParam);
+        } else {
+          this.selectedSlaveName = `Slave ${this.selectedSlaveId}`;
+        }
+      }
+
+      // Continue with existing initialization
       if (window.location.protocol !== "https:") {
         this.showAlert = true;
       }
       await this.getXraySetting();
       await this.getXrayResult();
       await this.getOutboundsTraffic();
+      await this.getSlaves();
+      await this.getDBOutbounds();
+      await this.getDBRoutingRules();
 
       if (window.wsClient) {
-          window.wsClient.connect();
-          window.wsClient.on('outbounds', (payload) => {
-            if (payload) {
-              this.outboundsTraffic = payload;
-              this.$forceUpdate();
-            }
-          });
+        window.wsClient.connect();
+        window.wsClient.on('outbounds', (payload) => {
+          if (payload) {
+            this.outboundsTraffic = payload;
+            this.$forceUpdate();
+          }
+        });
       }
 
       while (true) {
@@ -1014,13 +1167,7 @@
       },
       outboundData: {
         get: function () {
-          data = []
-          if (this.templateSettings != null) {
-            this.templateSettings.outbounds.forEach((o, index) => {
-              data.push({ 'key': index, ...o });
-            });
-          }
-          return data;
+          return this.dbOutbounds.map((o, index) => ({ 'key': index, ...o }));
         },
       },
       reverseData: {
@@ -1051,23 +1198,18 @@
       },
       routingRuleData: {
         get: function () {
-          data = [];
-          if (this.templateSettings != null) {
-            this.templateSettings.routing.rules.forEach((r, index) => {
-              data.push({ 'key': index, ...r });
-            });
-            // Make rules readable
-            data.forEach(r => {
-              if (r.domain) r.domain = r.domain.join(',')
-              if (r.ip) r.ip = r.ip.join(',')
-              if (r.source) r.source = r.source.join(',');
-              if (r.user) r.user = r.user.join(',')
-              if (r.inboundTag) r.inboundTag = r.inboundTag.join(',')
-              if (r.protocol) r.protocol = r.protocol.join(',')
-              if (r.attrs) r.attrs = JSON.stringify(r.attrs, null, 2)
-            });
-          }
-          return data;
+          return this.dbRoutingRules.map((r, index) => {
+            // Formating for display
+            let display = { 'key': index, ...r };
+            if (Array.isArray(display.domain)) display.domain = display.domain.join(',');
+            if (Array.isArray(display.ip)) display.ip = display.ip.join(',');
+            if (Array.isArray(display.source)) display.source = display.source.join(',');
+            if (Array.isArray(display.user)) display.user = display.user.join(',');
+            if (Array.isArray(display.inboundTag)) display.inboundTag = display.inboundTag.join(',');
+            if (Array.isArray(display.protocol)) display.protocol = display.protocol.join(',');
+            // if (display.attrs && typeof display.attrs === 'object') display.attrs = JSON.stringify(display.attrs, null, 2);
+            return display;
+          });
         }
       },
       balancersData: {

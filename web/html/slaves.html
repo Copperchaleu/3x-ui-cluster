@@ -22,6 +22,7 @@
                 </template>
                 <template slot="action" slot-scope="text, record">
                     <a-space>
+                        <a-button icon="setting" size="small" type="primary" @click="configureXray(record)">Xray Settings</a-button>
                         <a-button icon="code" size="small" @click="showInstallCommand(record)">Install Cmd</a-button>
                         <a-popconfirm title='Delete this slave?' @confirm="delSlave(record.id)">
                             <a-button type="danger" icon="delete" size="small">Delete</a-button>
@@ -76,7 +77,7 @@
                 { title: '{{ i18n "pages.slaves.status" }}', dataIndex: 'status', scopedSlots: { customRender: 'status' }, width: '100px' },
                 { title: '{{ i18n "pages.slaves.version" }}', dataIndex: 'version', key: 'version', width: '120px' },
                 { title: 'System Stats', dataIndex: 'systemStats', scopedSlots: { customRender: 'systemStats' } },
-                { title: 'Action', key: 'action', scopedSlots: { customRender: 'action' }, width: '200px' }
+                { title: 'Action', key: 'action', scopedSlots: { customRender: 'action' }, width: '280px' }
             ],
             addSlaveModal: {
                 visible: false,
@@ -160,6 +161,11 @@
                 document.execCommand('copy');
                 document.body.removeChild(textarea);
                 this.$message.success('Command copied to clipboard!');
+            },
+            configureXray(slave) {
+                // Navigate to Xray settings page with slaveId parameter
+                const basePath = window.location.pathname.split('/panel')[0] || '';
+                window.location.href = `${basePath}/panel/xray?slaveId=${slave.id}&slaveName=${encodeURIComponent(slave.name)}`;
             },
             delSlave(id) {
                 HttpUtil.post(`/panel/api/slave/del/${id}`).then(res => {
