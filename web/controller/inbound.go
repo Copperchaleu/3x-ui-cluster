@@ -32,7 +32,7 @@ func NewInboundController(g *gin.RouterGroup) *InboundController {
 // initRouter initializes the routes for inbound-related operations.
 func (a *InboundController) initRouter(g *gin.RouterGroup) {
 
-	g.GET("/list", a.getInbounds)
+	g.POST("/list", a.getInbounds)
 	g.GET("/get/:id", a.getInbound)
 	g.GET("/getClientTraffics/:email", a.getClientTraffics)
 	g.GET("/getClientTrafficsById/:id", a.getClientTrafficsById)
