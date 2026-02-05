@@ -1092,7 +1092,11 @@
         }
       },
       async getDBOutbounds() {
-        const msg = await HttpUtil.post("/panel/api/outbounds/list");
+        let url = "/panel/api/outbounds/list";
+        if (this.selectedSlaveId) {
+          url += `?slaveId=${this.selectedSlaveId}`;
+        }
+        const msg = await HttpUtil.post(url);
         if (msg.success) {
           this.dbOutbounds = msg.obj.map(o => {
             return {
@@ -1106,7 +1110,11 @@
         }
       },
       async getDBRoutingRules() {
-        const msg = await HttpUtil.post("/panel/api/routing/list");
+        let url = "/panel/api/routing/list";
+        if (this.selectedSlaveId) {
+          url += `?slaveId=${this.selectedSlaveId}`;
+        }
+        const msg = await HttpUtil.post(url);
         if (msg.success) {
           this.dbRoutingRules = msg.obj.map(r => {
             return {
