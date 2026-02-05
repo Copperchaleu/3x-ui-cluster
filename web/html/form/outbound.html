@@ -11,7 +11,7 @@
           <a-select-option v-for="s in app.slaves" :key="s.id" :value="s.id">[[ s.name ]]</a-select-option>
         </a-select>
       </a-form-item>
-      <a-form-item label='Server' v-else>
+      <a-form-item label='Server' v-else-if="outbound.slaveId">
         <a-input :value="app.getSlaveName(outbound.slaveId)" disabled></a-input>
       </a-form-item>
       <a-form-item label='{{ i18n "protocol" }}'>
