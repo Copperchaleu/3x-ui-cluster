@@ -101,6 +101,25 @@ func (s *SlaveService) PushConfig(slaveId int) error {
 	return conn.WriteMessage(websocket.TextMessage, data)
 }
 
+func (s *SlaveService) RestartSlaveXray(slaveId int) error {
+	data, err := json.Marshal(map[string]interface{}{
+		"type": "restart_xray",
+	})
+	if err != nil {
+		return err
+	}
+
+	slaveLock.RLock()
+	conn, ok := slaveConns[slaveId]
+	slaveLock.RUnlock()
+
+	if !ok {
+		return fmt.Errorf("slave %d not connected", slaveId)
+	}
+
+	return conn.WriteMessage(websocket.TextMessage, data)
+}
+
 func (s *SlaveService) GetAllSlaves() ([]*model.Slave, error) {
 	db := database.GetDB()
 	var slaves []*model.Slave

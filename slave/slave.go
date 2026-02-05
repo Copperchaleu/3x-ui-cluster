@@ -100,7 +100,13 @@ func (s *Slave) connectAndLoop() {
 			continue
 		}
 
-		if typeStr, ok := msg["type"].(string); ok && typeStr == "update_config" {
+		typeStr, ok := msg["type"].(string)
+		if !ok {
+			continue
+		}
+
+		switch typeStr {
+		case "update_config":
 			// Handle Config Update
 			var inbounds []*model.Inbound
 			if inboundsRaw, ok := msg["inbounds"]; ok {
@@ -119,6 +125,10 @@ func (s *Slave) connectAndLoop() {
             }
 
 			s.applyConfig(inbounds, outbounds, routingRules)
+			
+		case "restart_xray":
+			// Handle Xray Restart Request
+			s.restartXray()
 		}
 	}
 }
@@ -219,5 +229,26 @@ func (s *Slave) applyConfig(inbounds []*model.Inbound, outbounds []interface{}, 
 	} else {
 		s.process = proc
 		logger.Info("Xray started successfully")
+	}
+}
+
+func (s *Slave) restartXray() {
+	logger.Info("Restarting Xray...")
+	
+	if s.process != nil && s.process.IsRunning() {
+		if err := s.process.Stop(); err != nil {
+			logger.Error("Failed to stop Xray:", err)
+			return
+		}
+	}
+	
+	if s.process != nil {
+		if err := s.process.Start(); err != nil {
+			logger.Error("Failed to restart Xray:", err)
+		} else {
+			logger.Info("Xray restarted successfully")
+		}
+	} else {
+		logger.Warn("No Xray process to restart")
 	}
 }

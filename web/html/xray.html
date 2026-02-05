@@ -404,7 +404,16 @@
       },
       async restartXray() {
         this.loading(true);
-        const msg = await HttpUtil.post("/panel/api/server/restartXrayService");
+        let msg;
+        
+        if (this.selectedSlaveId) {
+          // Restart specific slave's Xray
+          msg = await HttpUtil.post(`/panel/api/server/restartSlaveXray/${this.selectedSlaveId}`);
+        } else {
+          // Restart all slaves' Xray
+          msg = await HttpUtil.post("/panel/api/server/restartXrayService");
+        }
+        
         this.loading(false);
         if (msg.success) {
           await PromiseUtil.sleep(500);
