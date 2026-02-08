@@ -367,7 +367,7 @@ func (s *SlaveService) ProcessTrafficStats(slaveId int, data map[string]interfac
 	return nil
 }
 
-func (s *SlaveService) GenerateInstallCommand(slaveId int, req *http.Request) (string, error) {
+func (s *SlaveService) GenerateInstallCommand(slaveId int, req *http.Request, basePath string) (string, error) {
 	slave, err := s.GetSlave(slaveId)
 	if err != nil {
 		return "", err
@@ -380,9 +380,13 @@ func (s *SlaveService) GenerateInstallCommand(slaveId int, req *http.Request) (s
 	}
 	host := req.Host
 	
+	// Build the full URL with basePath
+	// basePath already includes leading and trailing slashes (e.g., "/ixUwrIpIWgOzE7ZS9w/")
+	masterUrl := fmt.Sprintf("%s://%s%s", scheme, host, basePath)
+	
 	// Generate install command
-	command := fmt.Sprintf("bash <(curl -Ls https://raw.githubusercontent.com/GrayPaul0320/3x-ui-cluster/main/install.sh) slave %s://%s %s",
-		scheme, host, slave.Secret)
+	command := fmt.Sprintf("bash <(curl -Ls https://raw.githubusercontent.com/GrayPaul0320/3x-ui-cluster/main/install.sh) slave %s %s",
+		masterUrl, slave.Secret)
 	
 	return command, nil
 }

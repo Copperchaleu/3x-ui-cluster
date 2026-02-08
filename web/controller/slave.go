@@ -100,7 +100,14 @@ func (s *SlaveController) getInstallCommand(c *gin.Context) {
 		return
 	}
 	id, _ := strconv.Atoi(c.Param("id"))
-	command, err := s.slaveService.GenerateInstallCommand(id, c.Request)
+	
+	// Get basePath from context (set by web.go middleware)
+	basePath := "/"
+	if bp, exists := c.Get("base_path"); exists {
+		basePath = bp.(string)
+	}
+	
+	command, err := s.slaveService.GenerateInstallCommand(id, c.Request, basePath)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "msg": err.Error()})
 		return
