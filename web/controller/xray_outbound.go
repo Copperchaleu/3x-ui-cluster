@@ -20,7 +20,7 @@ func NewOutboundController(g *gin.RouterGroup) *OutboundController {
 }
 
 func (a *OutboundController) initRouter(g *gin.RouterGroup) {
-	g.POST("/list", a.getOutbounds)
+	g.GET("/list", a.getOutbounds)
 	g.POST("/add", a.addOutbound)
 	g.POST("/update", a.updateOutbound)
 	g.POST("/del/:id", a.deleteOutbound)

@@ -193,10 +193,19 @@
         }
       }
       this.isEdit = isEdit;
-      this.inboundTags = app.templateSettings.inbounds.filter((i) => !ObjectUtil.isEmpty(i.tag)).map(obj => obj.tag);
-      this.inboundTags.push(...app.inboundTags);
-      if (app.enableDNS && !ObjectUtil.isEmpty(app.dnsTag)) this.inboundTags.push(app.dnsTag)
-      this.outboundTags = ["", ...app.templateSettings.outbounds.filter((o) => !ObjectUtil.isEmpty(o.tag)).map(obj => obj.tag)];
+      
+      // Use database inbounds/outbounds filtered by slave for tags
+      if (app.selectedSlaveId) {
+        // When from slave page, use only this slave's tags
+        this.inboundTags = app.dbInbounds.filter((i) => !ObjectUtil.isEmpty(i.tag)).map(obj => obj.tag);
+        this.outboundTags = ["", ...app.dbOutbounds.filter((o) => !ObjectUtil.isEmpty(o.tag)).map(obj => obj.tag)];
+      } else {
+        // When from home page, use template settings
+        this.inboundTags = app.templateSettings.inbounds.filter((i) => !ObjectUtil.isEmpty(i.tag)).map(obj => obj.tag);
+        this.inboundTags.push(...app.inboundTags);
+        if (app.enableDNS && !ObjectUtil.isEmpty(app.dnsTag)) this.inboundTags.push(app.dnsTag)
+        this.outboundTags = ["", ...app.templateSettings.outbounds.filter((o) => !ObjectUtil.isEmpty(o.tag)).map(obj => obj.tag)];
+      }
       if (app.templateSettings.reverse) {
         if (app.templateSettings.reverse.bridges) {
           this.inboundTags.push(...app.templateSettings.reverse.bridges.map(b => b.tag));

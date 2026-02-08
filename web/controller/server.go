@@ -53,6 +53,7 @@ func (a *ServerController) initRouter(g *gin.RouterGroup) {
 
 	g.POST("/stopXrayService", a.stopXrayService)
 	g.POST("/restartXrayService", a.restartXrayService)
+	g.POST("/restartSlaveXray/:slaveId", a.restartSlaveXray)
 	g.POST("/installXray/:version", a.installXray)
 	g.POST("/updateGeofile", a.updateGeofile)
 	g.POST("/updateGeofile/:fileName", a.updateGeofile)
@@ -185,6 +186,23 @@ func (a *ServerController) restartXrayService(c *gin.Context) {
 		"Xray service has been restarted successfully",
 		"success",
 	)
+}
+
+// restartSlaveXray restarts the Xray service on a specific slave.
+func (a *ServerController) restartSlaveXray(c *gin.Context) {
+	slaveId, err := strconv.Atoi(c.Param("slaveId"))
+	if err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.xray.restartError"), err)
+		return
+	}
+
+	slaveService := &service.SlaveService{}
+	err = slaveService.RestartSlaveXray(slaveId)
+	if err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.xray.restartError"), err)
+		return
+	}
+	jsonMsg(c, I18nWeb(c, "pages.xray.restartSuccess"), err)
 }
 
 // getLogs retrieves the application logs based on count, level, and syslog filters.

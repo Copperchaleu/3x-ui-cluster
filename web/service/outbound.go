@@ -79,6 +79,19 @@ func (s *OutboundService) GetOutboundsTraffic() ([]*model.OutboundTraffics, erro
 	return traffics, nil
 }
 
+func (s *OutboundService) GetOutboundsTrafficForSlave(slaveId int) ([]*model.OutboundTraffics, error) {
+	db := database.GetDB()
+	var traffics []*model.OutboundTraffics
+
+	err := db.Model(model.OutboundTraffics{}).Where("slave_id = ?", slaveId).Find(&traffics).Error
+	if err != nil {
+		logger.Warning("Error retrieving OutboundTraffics for slave: ", err)
+		return nil, err
+	}
+
+	return traffics, nil
+}
+
 func (s *OutboundService) ResetOutboundTraffic(tag string) error {
 	db := database.GetDB()
 
@@ -92,6 +105,29 @@ func (s *OutboundService) ResetOutboundTraffic(tag string) error {
 	result := db.Model(model.OutboundTraffics{}).
 		Where(whereText, tag).
 		Updates(map[string]any{"up": 0, "down": 0, "total": 0})
+
+	err := result.Error
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *OutboundService) ResetOutboundTrafficForSlave(slaveId int, tag string) error {
+	db := database.GetDB()
+
+	query := db.Model(model.OutboundTraffics{}).Where("slave_id = ?", slaveId)
+	
+	if tag == "-alltags-" {
+		// Reset all outbounds for this slave
+		query = query.Where("tag <> ?", tag)
+	} else {
+		// Reset specific outbound tag for this slave
+		query = query.Where("tag = ?", tag)
+	}
+
+	result := query.Updates(map[string]any{"up": 0, "down": 0, "total": 0})
 
 	err := result.Error
 	if err != nil {

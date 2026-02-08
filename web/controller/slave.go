@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -35,7 +36,7 @@ func (s *SlaveController) getSlaves(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"success": false, "msg": "unauthorized"})
 		return
 	}
-    slaves, err := s.slaveService.GetAllSlaves()
+    slaves, err := s.slaveService.GetAllSlavesWithTraffic()
     if err != nil {
         c.JSON(http.StatusInternalServerError, gin.H{"success": false, "msg": err.Error()})
         return
@@ -63,6 +64,12 @@ func (s *SlaveController) addSlave(c *gin.Context) {
          return
     }
     
+    // Initialize slave settings with defaults (xrayTemplateConfig)
+    slaveSettingService := service.SlaveSettingService{}
+    if err := slaveSettingService.InitializeSlaveWithDefaults(slave.Id); err != nil {
+         logger.Warningf("Failed to initialize settings for new slave %d: %v", slave.Id, err)
+    }
+    
     logger.Infof("Slave added successfully: id=%d, name=%s", slave.Id, slave.Name)
     c.JSON(http.StatusOK, gin.H{"success": true, "msg": "Slave added", "obj": slave})
 }
@@ -73,6 +80,13 @@ func (s *SlaveController) delSlave(c *gin.Context) {
 		return
 	}
     id, _ := strconv.Atoi(c.Param("id"))
+    
+    // Delete slave settings first
+    slaveSettingService := service.SlaveSettingService{}
+    if err := slaveSettingService.DeleteAllSettingsForSlave(id); err != nil {
+         logger.Warningf("Failed to delete settings for slave %d: %v", id, err)
+    }
+    
     if err := s.slaveService.DeleteSlave(id); err != nil {
          c.JSON(http.StatusInternalServerError, gin.H{"success": false, "msg": err.Error()})
          return
@@ -121,7 +135,18 @@ func (s *SlaveController) connectSlave(c *gin.Context) {
         if err != nil {
             break
         }
-        // Assuming Slave sends stats JSON
+        
+        // Try to parse message as JSON
+        var msgData map[string]interface{}
+        if err := json.Unmarshal(msg, &msgData); err == nil {
+            // Check if it's a traffic stats message
+            if msgType, ok := msgData["type"].(string); ok && msgType == "traffic_stats" {
+                s.slaveService.ProcessTrafficStats(slave.Id, msgData)
+                continue
+            }
+        }
+        
+        // Otherwise treat as system stats
         s.slaveService.UpdateSlaveStatus(slave.Id, "online", string(msg))
         logger.Debug("Received from slave %d: %s", slave.Id, string(msg))
     }

@@ -56,6 +56,14 @@ print_error() {
 
 # 构建 Slave 镜像
 build() {
+    print_info "Building 3x-ui binary (static compilation for Alpine)..."
+    CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o 3x-ui main.go
+    if [ ! -f "3x-ui" ]; then
+        print_error "Failed to build 3x-ui binary"
+        exit 1
+    fi
+    print_info "Binary built successfully"
+    
     print_info "Building slave Docker image..."
     docker build -f Dockerfile.slave -t 3x-ui-slave:latest .
     print_info "Build completed!"
@@ -100,7 +108,7 @@ start_all() {
     fi
     
     print_info "Starting all slaves..."
-    docker-compose -f "${COMPOSE_FILE}" up -d
+    docker compose -f "${COMPOSE_FILE}" up -d
     print_info "All slaves started!"
 }
 
@@ -122,7 +130,7 @@ stop_slave() {
 # 停止所有 slaves
 stop_all() {
     print_info "Stopping all slaves..."
-    docker-compose -f "${COMPOSE_FILE}" down
+    docker compose -f "${COMPOSE_FILE}" down
     print_info "All slaves stopped!"
 }
 
@@ -132,7 +140,7 @@ logs() {
     
     if [ -z "$slave_name" ]; then
         print_info "Showing logs for all slaves..."
-        docker-compose -f "${COMPOSE_FILE}" logs -f
+        docker compose -f "${COMPOSE_FILE}" logs -f
     else
         print_info "Showing logs for ${slave_name}..."
         docker logs -f "3x-ui-${slave_name}"
@@ -170,7 +178,7 @@ cleanup() {
     fi
     
     print_info "Stopping and removing all slaves..."
-    docker-compose -f "${COMPOSE_FILE}" down -v
+    docker compose -f "${COMPOSE_FILE}" down -v
     
     print_info "Removing standalone containers..."
     docker ps -a --filter "name=3x-ui-slave" -q | xargs -r docker rm -f

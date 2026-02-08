@@ -11,6 +11,8 @@ import (
 	"github.com/mhsanaei/3x-ui/v2/database"
 	"github.com/mhsanaei/3x-ui/v2/database/model"
 	"github.com/mhsanaei/3x-ui/v2/logger"
+	"github.com/mhsanaei/3x-ui/v2/xray"
+	"gorm.io/gorm"
 )
 
 type SlaveService struct {
@@ -101,11 +103,72 @@ func (s *SlaveService) PushConfig(slaveId int) error {
 	return conn.WriteMessage(websocket.TextMessage, data)
 }
 
+func (s *SlaveService) RestartSlaveXray(slaveId int) error {
+	data, err := json.Marshal(map[string]interface{}{
+		"type": "restart_xray",
+	})
+	if err != nil {
+		return err
+	}
+
+	slaveLock.RLock()
+	conn, ok := slaveConns[slaveId]
+	slaveLock.RUnlock()
+
+	if !ok {
+		return fmt.Errorf("slave %d not connected", slaveId)
+	}
+
+	return conn.WriteMessage(websocket.TextMessage, data)
+}
+
 func (s *SlaveService) GetAllSlaves() ([]*model.Slave, error) {
 	db := database.GetDB()
 	var slaves []*model.Slave
 	err := db.Model(model.Slave{}).Find(&slaves).Error
 	return slaves, err
+}
+
+func (s *SlaveService) GetAllSlavesWithTraffic() ([]map[string]interface{}, error) {
+	db := database.GetDB()
+	var slaves []*model.Slave
+	if err := db.Model(model.Slave{}).Find(&slaves).Error; err != nil {
+		return nil, err
+	}
+
+	result := make([]map[string]interface{}, len(slaves))
+	for i, slave := range slaves {
+		// Get traffic stats from inbounds table
+		var totalUplink, totalDownlink int64
+		type TrafficSum struct {
+			TotalUp   int64
+			TotalDown int64
+		}
+		var trafficSum TrafficSum
+		db.Model(&model.Inbound{}).
+			Where("slave_id = ?", slave.Id).
+			Select("COALESCE(SUM(up), 0) as total_up, COALESCE(SUM(down), 0) as total_down").
+			Scan(&trafficSum)
+		
+		totalUplink = trafficSum.TotalUp
+		totalDownlink = trafficSum.TotalDown
+
+		result[i] = map[string]interface{}{
+			"id":           slave.Id,
+			"name":         slave.Name,
+			"address":      slave.Address,
+			"port":         slave.Port,
+			"secret":       slave.Secret,
+			"status":       slave.Status,
+			"lastSeen":     slave.LastSeen,
+			"version":      slave.Version,
+			"systemStats":  slave.SystemStats,
+			"totalUplink":  totalUplink,
+			"totalDownlink": totalDownlink,
+		}
+	}
+
+	return result, nil
 }
 
 func (s *SlaveService) GetSlave(id int) (*model.Slave, error) {
@@ -155,6 +218,153 @@ func (s *SlaveService) UpdateSlaveStatus(id int, status string, stats string) er
         "systemStats": stats,
         "lastSeen": time.Now().Unix(),
     }).Error
+}
+
+func (s *SlaveService) ProcessTrafficStats(slaveId int, data map[string]interface{}) error {
+	db := database.GetDB()
+	now := time.Now()
+
+	// Process inbound traffic stats
+	if inbounds, ok := data["inbounds"].(map[string]interface{}); ok {
+		logger.Infof("ProcessTrafficStats: Processing %d inbounds for slave %d", len(inbounds), slaveId)
+		
+		for inboundTag, statsInterface := range inbounds {
+			stats, ok := statsInterface.(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			uplink, _ := stats["uplink"].(float64)
+			downlink, _ := stats["downlink"].(float64)
+
+			// Update inbounds table directly
+			result := db.Model(&model.Inbound{}).
+				Where("tag = ? AND slave_id = ?", inboundTag, slaveId).
+				Updates(map[string]interface{}{
+					"up":       gorm.Expr("up + ?", int64(uplink)),
+					"down":     gorm.Expr("down + ?", int64(downlink)),
+					"all_time": gorm.Expr("COALESCE(all_time, 0) + ?", int64(uplink+downlink)),
+				})
+
+			if result.Error != nil {
+				logger.Errorf("Failed to update inbound traffic: slave=%d, tag=%s, error=%v",
+					slaveId, inboundTag, result.Error)
+			} else {
+				logger.Infof("Updated inbound traffic: slave=%d, tag=%s, up=%d, down=%d, rows=%d",
+					slaveId, inboundTag, int64(uplink), int64(downlink), result.RowsAffected)
+			}
+		}
+	}
+
+	// Process user traffic stats and aggregate to inbound
+	inboundTrafficMap := make(map[int]struct{ up, down int64 })
+	
+	if users, ok := data["users"].([]interface{}); ok {
+		logger.Infof("ProcessTrafficStats: Processing %d users for slave %d", len(users), slaveId)
+		
+		for _, userInterface := range users {
+			userData, ok := userInterface.(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			email, _ := userData["email"].(string)
+			uplink, _ := userData["uplink"].(float64)
+			downlink, _ := userData["downlink"].(float64)
+
+			if email == "" || (uplink == 0 && downlink == 0) {
+				continue
+			}
+
+			// Update client traffic
+			var clientTraffic xray.ClientTraffic
+			result := db.Where("email = ?", email).First(&clientTraffic)
+
+			if result.Error == nil {
+				// Update existing client
+				clientTraffic.Up += int64(uplink)
+				clientTraffic.Down += int64(downlink)
+				clientTraffic.AllTime += int64(uplink) + int64(downlink)
+				clientTraffic.LastOnline = now.Unix()
+				db.Save(&clientTraffic)
+
+				// Aggregate traffic by inbound_id
+				if traffic, exists := inboundTrafficMap[clientTraffic.InboundId]; exists {
+					traffic.up += int64(uplink)
+					traffic.down += int64(downlink)
+					inboundTrafficMap[clientTraffic.InboundId] = traffic
+				} else {
+					inboundTrafficMap[clientTraffic.InboundId] = struct{ up, down int64 }{
+						up:   int64(uplink),
+						down: int64(downlink),
+					}
+				}
+
+				logger.Infof("Updated user traffic: email=%s, up=%d, down=%d, inbound_id=%d",
+					email, int64(uplink), int64(downlink), clientTraffic.InboundId)
+			} else {
+				logger.Debugf("User not found in database: %s", email)
+			}
+		}
+	}
+
+	// Update inbound traffic based on aggregated user traffic
+	for inboundId, traffic := range inboundTrafficMap {
+		result := db.Model(&model.Inbound{}).
+			Where("id = ? AND slave_id = ?", inboundId, slaveId).
+			Updates(map[string]interface{}{
+				"up":       gorm.Expr("up + ?", traffic.up),
+				"down":     gorm.Expr("down + ?", traffic.down),
+				"all_time": gorm.Expr("COALESCE(all_time, 0) + ?", traffic.up+traffic.down),
+			})
+
+		if result.Error != nil {
+			logger.Errorf("Failed to update inbound traffic from users: inbound_id=%d, error=%v",
+				inboundId, result.Error)
+		} else if result.RowsAffected > 0 {
+			logger.Infof("Updated inbound traffic from users: inbound_id=%d, up=%d, down=%d",
+				inboundId, traffic.up, traffic.down)
+		}
+	}
+
+	// Process outbound traffic stats
+	if outbounds, ok := data["outbounds"].(map[string]interface{}); ok {
+		logger.Infof("ProcessTrafficStats: Processing %d outbounds for slave %d", len(outbounds), slaveId)
+		
+		for outboundTag, statsInterface := range outbounds {
+			stats, ok := statsInterface.(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			uplink, _ := stats["uplink"].(float64)
+			downlink, _ := stats["downlink"].(float64)
+
+			if uplink == 0 && downlink == 0 {
+				continue
+			}
+
+			// Update or create outbound traffic record
+			var outbound model.OutboundTraffics
+			result := db.Where("tag = ? AND slave_id = ?", outboundTag, slaveId).
+				FirstOrCreate(&outbound, model.OutboundTraffics{Tag: outboundTag, SlaveId: slaveId})
+
+			if result.Error == nil {
+				outbound.Up += int64(uplink)
+				outbound.Down += int64(downlink)
+				outbound.Total = outbound.Up + outbound.Down
+				db.Save(&outbound)
+
+				logger.Infof("Updated outbound traffic: slave=%d, tag=%s, up=%d, down=%d, total=%d",
+					slaveId, outboundTag, int64(uplink), int64(downlink), outbound.Total)
+			} else {
+				logger.Errorf("Failed to update outbound traffic: slave=%d, tag=%s, error=%v",
+					slaveId, outboundTag, result.Error)
+			}
+		}
+	}
+
+	return nil
 }
 
 func (s *SlaveService) GenerateInstallCommand(slaveId int, req *http.Request) (string, error) {

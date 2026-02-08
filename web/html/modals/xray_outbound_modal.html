@@ -25,7 +25,7 @@
         ok() {
             ObjectUtil.execute(outModal.confirm, outModal.outbound.toJson());
         },
-        show({ title='', okText='{{ i18n "sure" }}', outbound, confirm=(outbound)=>{}, isEdit=false, tags=[]  }) {
+        show({ title='', okText='{{ i18n "sure" }}', outbound, obj, confirm=(outbound)=>{}, isEdit=false, tags=[]  }) {
             this.title = title;
             this.okText = okText;
             this.confirm = confirm;
@@ -33,7 +33,7 @@
             this.link = '';
             this.activeKey = '1';
             this.visible = true;
-            this.outbound = isEdit ? Outbound.fromJson(outbound) : new Outbound();
+            this.outbound = isEdit ? Outbound.fromJson(outbound) : (obj || new Outbound());
             this.isEdit = isEdit;
             this.tags = tags;
             this.check()

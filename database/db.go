@@ -5,6 +5,7 @@ package database
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"log"
@@ -41,6 +42,7 @@ func initModels() error {
 		&model.XrayRoutingRule{},
 		&xray.ClientTraffic{},
 		&model.HistoryOfSeeders{},
+		&model.SlaveSetting{},
 	}
 	for _, model := range models {
 		if err := db.AutoMigrate(model); err != nil {
@@ -179,6 +181,12 @@ func InitDB(dbPath string) error {
         log.Println("   Please add a Slave server and reassign these configurations via the web panel.")
         log.Println("   Or run `DELETE FROM inbounds WHERE slave_id=0; DELETE FROM xray_outbounds WHERE slave_id=0; DELETE FROM xray_routing_rules WHERE slave_id=0;` to remove them.")
     }
+    
+    // Migration: Initialize slave_settings with xrayTemplateConfig for all slaves
+    log.Println("Migrating xrayTemplateConfig to per-slave settings...")
+    if err := migrateXrayTemplateConfig(); err != nil {
+        log.Printf("Warning: Failed to migrate xrayTemplateConfig: %v", err)
+    }
 
 	if err := initModels(); err != nil {
 		return err
@@ -261,5 +269,55 @@ func ValidateSQLiteDB(dbPath string) error {
 	if res != "ok" {
 		return errors.New("sqlite integrity check failed: " + res)
 	}
+	return nil
+}
+
+// migrateXrayTemplateConfig migrates the global xrayTemplateConfig to per-slave settings
+func migrateXrayTemplateConfig() error {
+	// Check if already migrated
+	var count int64
+	db.Model(&model.SlaveSetting{}).Where("setting_key = ?", "xrayTemplateConfig").Count(&count)
+	if count > 0 {
+		log.Println("xrayTemplateConfig already migrated to slave_settings")
+		return nil
+	}
+
+	// Get global xrayTemplateConfig from settings table
+	var globalConfig string
+	err := db.Model(&model.Setting{}).Where("key = ?", "xrayTemplateConfig").Pluck("value", &globalConfig).Error
+	if err != nil {
+		return fmt.Errorf("failed to get global xrayTemplateConfig: %v", err)
+	}
+
+	if globalConfig == "" {
+		log.Println("No global xrayTemplateConfig found, skipping migration")
+		return nil
+	}
+
+	// Get all slaves
+	var slaves []model.Slave
+	if err := db.Find(&slaves).Error; err != nil {
+		return fmt.Errorf("failed to get slaves: %v", err)
+	}
+
+	if len(slaves) == 0 {
+		log.Println("No slaves found, skipping xrayTemplateConfig migration")
+		return nil
+	}
+
+	// Create slave_settings record for each slave
+	for _, slave := range slaves {
+		slaveSetting := model.SlaveSetting{
+			SlaveId:      slave.Id,
+			SettingKey:   "xrayTemplateConfig",
+			SettingValue: globalConfig,
+		}
+		if err := db.Create(&slaveSetting).Error; err != nil {
+			log.Printf("Warning: Failed to create slave_setting for slave %d: %v", slave.Id, err)
+		} else {
+			log.Printf("✓ Migrated xrayTemplateConfig to slave %d (%s)", slave.Id, slave.Name)
+		}
+	}
+	log.Println("xrayTemplateConfig migration completed")
 	return nil
 }

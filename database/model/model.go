@@ -75,11 +75,12 @@ type Inbound struct {
 
 // OutboundTraffics tracks traffic statistics for Xray outbound connections.
 type OutboundTraffics struct {
-	Id    int    `json:"id" form:"id" gorm:"primaryKey;autoIncrement"`
-	Tag   string `json:"tag" form:"tag" gorm:"unique"`
-	Up    int64  `json:"up" form:"up" gorm:"default:0"`
-	Down  int64  `json:"down" form:"down" gorm:"default:0"`
-	Total int64  `json:"total" form:"total" gorm:"default:0"`
+	Id      int    `json:"id" form:"id" gorm:"primaryKey;autoIncrement"`
+	SlaveId int    `json:"slaveId" form:"slaveId" gorm:"index:idx_slave_tag,unique"`
+	Tag     string `json:"tag" form:"tag" gorm:"index:idx_slave_tag,unique"`
+	Up      int64  `json:"up" form:"up" gorm:"default:0"`
+	Down    int64  `json:"down" form:"down" gorm:"default:0"`
+	Total   int64  `json:"total" form:"total" gorm:"default:0"`
 }
 
 // InboundClientIps stores IP addresses associated with inbound clients for access control.
@@ -139,4 +140,18 @@ type Client struct {
 	Reset      int    `json:"reset" form:"reset"`           // Reset period in days
 	CreatedAt  int64  `json:"created_at,omitempty"`         // Creation timestamp
 	UpdatedAt  int64  `json:"updated_at,omitempty"`         // Last update timestamp
+}
+
+
+// SlaveSetting represents a setting specific to a slave server.
+// This allows each slave to have its own configuration, including xrayTemplateConfig.
+type SlaveSetting struct {
+Id           int    `json:"id" gorm:"primaryKey;autoIncrement"`
+SlaveId      int    `json:"slaveId" form:"slaveId" gorm:"not null;uniqueIndex:idx_slave_setting"`
+SettingKey   string `json:"settingKey" form:"settingKey" gorm:"not null;uniqueIndex:idx_slave_setting;size:64"`
+SettingValue string `json:"settingValue" form:"settingValue" gorm:"type:text"`
+}
+
+func (SlaveSetting) TableName() string {
+return "slave_settings"
 }

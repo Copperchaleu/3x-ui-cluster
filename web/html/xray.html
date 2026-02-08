@@ -244,6 +244,7 @@
       slaves: [],
       selectedSlaveId: null,
       selectedSlaveName: '',  // Display name for the selected slave
+      dbInbounds: [],
       dbOutbounds: [],
       dbRoutingRules: [],
       saveBtnDisable: true,
@@ -373,13 +374,26 @@
         this.loadingStates.spinning = spinning;
       },
       async getOutboundsTraffic() {
-        const msg = await HttpUtil.get("/panel/xray/getOutboundsTraffic");
+        let url = "/panel/xray/getOutboundsTraffic";
+        if (this.selectedSlaveId) {
+          url += `?slaveId=${this.selectedSlaveId}`;
+        }
+        const msg = await HttpUtil.get(url);
         if (msg.success) {
           this.outboundsTraffic = msg.obj;
         }
       },
       async getXraySetting() {
-        const msg = await HttpUtil.post("/panel/xray/");
+        console.log('getXraySetting called, selectedSlaveId:', this.selectedSlaveId, 'isNaN:', isNaN(this.selectedSlaveId));
+        if (!this.selectedSlaveId || isNaN(this.selectedSlaveId)) {
+          console.error('selectedSlaveId validation failed');
+          this.$message.error('请先选择一个Slave节点');
+          return;
+        }
+
+        console.log('Requesting xray setting for slaveId:', this.selectedSlaveId);
+        const msg = await HttpUtil.post("/panel/xray/", { slaveId: this.selectedSlaveId });
+        console.log('getXraySetting response:', msg);
 
         if (msg.success) {
           if (!this.loadingStates.fetched) {
@@ -388,23 +402,130 @@
 
           result = JSON.parse(msg.obj);
           xs = JSON.stringify(result.xraySetting, null, 2);
+          console.log('Setting xraySetting, length:', xs.length);
           this.oldXraySetting = xs;
           this.xraySetting = xs;
           this.inboundTags = result.inboundTags;
           this.saveBtnDisable = true;
+        } else {
+          console.error('getXraySetting failed:', msg);
         }
       },
       async updateXraySetting() {
+        console.log('updateXraySetting called, selectedSlaveId:', this.selectedSlaveId, 'type:', typeof this.selectedSlaveId);
+        if (!this.selectedSlaveId || isNaN(this.selectedSlaveId)) {
+          this.$message.error('请先选择一个Slave节点 (当前值: ' + this.selectedSlaveId + ')');
+          return;
+        }
+
         this.loading(true);
-        const msg = await HttpUtil.post("/panel/xray/update", { xraySetting: this.xraySetting });
-        this.loading(false);
-        if (msg.success) {
-          await this.getXraySetting();
+
+        try {
+          // Process pending routing rules
+          const pendingRules = this.dbRoutingRules.filter(r => r._pendingAction);
+          for (const rule of pendingRules) {
+            if (rule._pendingAction === 'add') {
+              const apiRule = { ...rule };
+              delete apiRule.id;
+              delete apiRule._pendingAction;
+              apiRule.domain = JSON.stringify(apiRule.domain);
+              apiRule.ip = JSON.stringify(apiRule.ip);
+              apiRule.source = JSON.stringify(apiRule.source);
+              apiRule.user = JSON.stringify(apiRule.user);
+              apiRule.inboundTag = JSON.stringify(apiRule.inboundTag);
+              apiRule.protocol = JSON.stringify(apiRule.protocol);
+              const msg = await HttpUtil.post("/panel/api/routing/add", apiRule);
+              if (!msg.success) {
+                this.$message.error('添加路由规则失败');
+              }
+            } else if (rule._pendingAction === 'update') {
+              const apiRule = { ...rule };
+              delete apiRule._pendingAction;
+              apiRule.domain = JSON.stringify(apiRule.domain);
+              apiRule.ip = JSON.stringify(apiRule.ip);
+              apiRule.source = JSON.stringify(apiRule.source);
+              apiRule.user = JSON.stringify(apiRule.user);
+              apiRule.inboundTag = JSON.stringify(apiRule.inboundTag);
+              apiRule.protocol = JSON.stringify(apiRule.protocol);
+              const msg = await HttpUtil.post("/panel/api/routing/update", apiRule);
+              if (!msg.success) {
+                this.$message.error('更新路由规则失败');
+              }
+            } else if (rule._pendingAction === 'delete') {
+              const msg = await HttpUtil.post("/panel/api/routing/del/" + rule.id);
+              if (!msg.success) {
+                this.$message.error('删除路由规则失败');
+              }
+            }
+          }
+
+          // Process pending outbounds
+          const pendingOutbounds = this.dbOutbounds.filter(o => o._pendingAction);
+          for (const outbound of pendingOutbounds) {
+            if (outbound._pendingAction === 'add') {
+              const apiOutbound = { ...outbound };
+              delete apiOutbound.id;
+              delete apiOutbound._pendingAction;
+              apiOutbound.settings = JSON.stringify(apiOutbound.settings);
+              apiOutbound.streamSettings = JSON.stringify(apiOutbound.streamSettings);
+              apiOutbound.mux = JSON.stringify(apiOutbound.mux);
+              apiOutbound.proxySettings = JSON.stringify(apiOutbound.proxySettings || {});
+              const msg = await HttpUtil.post("/panel/api/outbounds/add", apiOutbound);
+              if (!msg.success) {
+                this.$message.error('添加出站规则失败: ' + outbound.tag);
+              }
+            } else if (outbound._pendingAction === 'update') {
+              const apiOutbound = { ...outbound };
+              delete apiOutbound._pendingAction;
+              apiOutbound.settings = JSON.stringify(apiOutbound.settings);
+              apiOutbound.streamSettings = JSON.stringify(apiOutbound.streamSettings);
+              apiOutbound.mux = JSON.stringify(apiOutbound.mux);
+              apiOutbound.proxySettings = JSON.stringify(apiOutbound.proxySettings || {});
+              const msg = await HttpUtil.post("/panel/api/outbounds/update", apiOutbound);
+              if (!msg.success) {
+                this.$message.error('更新出站规则失败: ' + outbound.tag);
+              }
+            } else if (outbound._pendingAction === 'delete') {
+              const msg = await HttpUtil.post("/panel/api/outbounds/del/" + outbound.id);
+              if (!msg.success) {
+                this.$message.error('删除出站规则失败: ' + outbound.tag);
+              }
+            }
+          }
+
+          // Reload rules and outbounds after processing
+          await this.getDBRoutingRules();
+          await this.getDBOutbounds();
+
+          // Save xray settings
+          const msg = await HttpUtil.post("/panel/xray/update", {
+            xraySetting: this.xraySetting,
+            slaveId: this.selectedSlaveId
+          });
+
+          if (msg.success) {
+            await this.getXraySetting();
+            this.$message.success('保存成功');
+          }
+        } catch (error) {
+          console.error('Error in updateXraySetting:', error);
+          this.$message.error('保存失败: ' + error.message);
+        } finally {
+          this.loading(false);
         }
       },
       async restartXray() {
         this.loading(true);
-        const msg = await HttpUtil.post("/panel/api/server/restartXrayService");
+        let msg;
+
+        if (this.selectedSlaveId) {
+          // Restart specific slave's Xray
+          msg = await HttpUtil.post(`/panel/api/server/restartSlaveXray/${this.selectedSlaveId}`);
+        } else {
+          // Restart all slaves' Xray
+          msg = await HttpUtil.post("/panel/api/server/restartXrayService");
+        }
+
         this.loading(false);
         if (msg.success) {
           await PromiseUtil.sleep(500);
@@ -464,8 +585,7 @@
       },
       templateRuleSetter(routeSettings) {
         const { data, property, outboundTag } = routeSettings;
-        const oldTemplateSettings = this.templateSettings;
-        const newTemplateSettings = oldTemplateSettings;
+        const newTemplateSettings = JSON.parse(JSON.stringify(this.templateSettings));
         currentProperty = this.templateRuleGetter({ outboundTag, property })
         if (currentProperty.length == 0) {
           const propertyRule = {
@@ -576,30 +696,42 @@
           this.$message.error('No slave servers available. Please add a slave server first.');
           return;
         }
+        // Create new outbound with pre-filled slaveId if available
+        const newOutbound = new Outbound();
+        if (this.selectedSlaveId) {
+          newOutbound.slaveId = this.selectedSlaveId;
+        }
         outModal.show({
           title: '{{ i18n "pages.xray.outbound.addOutbound"}}',
           okText: '{{ i18n "pages.xray.outbound.addOutbound" }}',
-          confirm: async (outbound) => {
+          obj: newOutbound,
+          confirm: (outbound) => {
             outModal.loading();
+
+            // If we have selectedSlaveId, ensure it's set on the outbound
+            if (this.selectedSlaveId) {
+              outbound.slaveId = this.selectedSlaveId;
+            }
+
             if (!outbound.slaveId) {
               this.$message.error('Please select a slave server.');
               outModal.loading(false);
               return;
             }
-            const apiOutbound = { ...outbound };
-            // slaveId already in outbound from form
-            apiOutbound.settings = JSON.stringify(apiOutbound.settings);
-            apiOutbound.streamSettings = JSON.stringify(apiOutbound.streamSettings);
-            apiOutbound.mux = JSON.stringify(apiOutbound.mux);
-            apiOutbound.proxySettings = JSON.stringify(outbound.proxySettings || {});
 
-            const msg = await HttpUtil.post("/panel/api/outbounds/add", apiOutbound);
-            if (msg.success) {
-              await this.getDBOutbounds();
-              outModal.close();
-            } else {
-              outModal.loading(false);
-            }
+            // Add to local array with temporary ID and mark as pending
+            const localOutbound = {
+              ...outbound,
+              id: Date.now(), // Temporary ID
+              _pendingAction: 'add' // Mark as pending add
+            };
+            this.dbOutbounds.push(localOutbound);
+
+            // Enable save button
+            this.saveBtnDisable = false;
+
+            this.$message.success('出站规则已添加，请点击保存按钮提交更改');
+            outModal.close();
           },
           isEdit: false,
           tags: this.dbOutbounds.map(obj => obj.tag)
@@ -609,22 +741,22 @@
         outModal.show({
           title: '{{ i18n "pages.xray.outbound.editOutbound"}} ' + (index + 1),
           outbound: this.dbOutbounds[index],
-          confirm: async (newOutbound) => {
+          confirm: (newOutbound) => {
             outModal.loading();
-            const apiOutbound = { ...this.dbOutbounds[index], ...newOutbound }; // Merge original data with form data
-            // slaveId already in outbound from form
-            apiOutbound.settings = JSON.stringify(apiOutbound.settings);
-            apiOutbound.streamSettings = JSON.stringify(apiOutbound.streamSettings);
-            apiOutbound.mux = JSON.stringify(apiOutbound.mux);
-            apiOutbound.proxySettings = JSON.stringify(apiOutbound.proxySettings || {});
 
-            const msg = await HttpUtil.post("/panel/api/outbounds/update", apiOutbound);
-            if (msg.success) {
-              await this.getDBOutbounds();
-              outModal.close();
-            } else {
-              outModal.loading(false);
-            }
+            // Update local array and mark as modified
+            const updatedOutbound = {
+              ...this.dbOutbounds[index],
+              ...newOutbound,
+              _pendingAction: this.dbOutbounds[index]._pendingAction || 'update' // Mark as pending update
+            };
+            this.$set(this.dbOutbounds, index, updatedOutbound);
+
+            // Enable save button
+            this.saveBtnDisable = false;
+
+            this.$message.success('出站规则已修改，请点击保存按钮提交更改');
+            outModal.close();
           },
           isEdit: true,
           tags: this.dbOutbounds.filter((o, i) => i != index).map(obj => obj.tag)
@@ -637,11 +769,20 @@
           content: '{{ i18n "pages.xray.outbound.deleteOutboundContent"}}',
           okText: '{{ i18n "sure"}}',
           cancelText: '{{ i18n "cancel"}}',
-          onOk: async () => {
-            const msg = await HttpUtil.post("/panel/api/outbounds/del/" + outbound.id);
-            if (msg.success) {
-              await this.getDBOutbounds();
+          onOk: () => {
+            // If it's a pending add, just remove it from array
+            if (outbound._pendingAction === 'add') {
+              this.dbOutbounds.splice(index, 1);
+            } else {
+              // Mark as pending delete
+              const deletedOutbound = { ...outbound, _pendingAction: 'delete' };
+              this.$set(this.dbOutbounds, index, deletedOutbound);
             }
+
+            // Enable save button
+            this.saveBtnDisable = false;
+
+            this.$message.success('出站规则已标记删除，请点击保存按钮提交更改');
           }
         });
       },
@@ -657,14 +798,16 @@
           confirm: (reverse, rules) => {
             reverseModal.loading();
             if (reverse.tag.length > 0) {
-              newTemplateSettings = this.templateSettings;
+              const newTemplateSettings = JSON.parse(JSON.stringify(this.templateSettings));
               if (newTemplateSettings.reverse == undefined) newTemplateSettings.reverse = {};
               if (newTemplateSettings.reverse[reverse.type + 's'] == undefined) newTemplateSettings.reverse[reverse.type + 's'] = [];
               newTemplateSettings.reverse[reverse.type + 's'].push({ tag: reverse.tag, domain: reverse.domain });
-              this.templateSettings = newTemplateSettings;
 
-              // Add related rules
-              this.templateSettings.routing.rules.push(...rules);
+              // Add related rules BEFORE setting templateSettings
+              newTemplateSettings.routing.rules.push(...rules);
+
+              // Now trigger the setter
+              this.templateSettings = newTemplateSettings;
               this.routingRuleSettings = JSON.stringify(this.templateSettings.routing.rules);
             }
             reverseModal.close();
@@ -686,7 +829,7 @@
             reverseModal.loading();
             if (reverse.tag.length > 0) {
               oldData = this.reverseData[index];
-              newTemplateSettings = this.templateSettings;
+              const newTemplateSettings = JSON.parse(JSON.stringify(this.templateSettings));
               oldReverseIndex = newTemplateSettings.reverse[oldData.type + 's'].findIndex(rs => rs.tag == oldData.tag);
               oldRuleIndex0 = oldRules.length > 0 ? newTemplateSettings.routing.rules.findIndex(r => JSON.stringify(r) == JSON.stringify(oldRules[0])) : -1;
               oldRuleIndex1 = oldRules.length == 2 ? newTemplateSettings.routing.rules.findIndex(r => JSON.stringify(r) == JSON.stringify(oldRules[1])) : -1;
@@ -700,13 +843,14 @@
                 if (!newTemplateSettings.reverse[reverse.type + 's']) newTemplateSettings.reverse[reverse.type + 's'] = [];
                 newTemplateSettings.reverse[reverse.type + 's'].push({ tag: reverse.tag, domain: reverse.domain });
               }
-              this.templateSettings = newTemplateSettings;
 
-              // Adjust Rules
-              newRules = this.templateSettings.routing.rules;
-              oldRuleIndex0 != -1 ? newRules[oldRuleIndex0] = rules[0] : newRules.push(rules[0]);
-              oldRuleIndex1 != -1 ? newRules[oldRuleIndex1] = rules[1] : newRules.push(rules[1]);
-              this.routingRuleSettings = JSON.stringify(newRules);
+              // Adjust Rules BEFORE setting templateSettings
+              oldRuleIndex0 != -1 ? newTemplateSettings.routing.rules[oldRuleIndex0] = rules[0] : newTemplateSettings.routing.rules.push(rules[0]);
+              oldRuleIndex1 != -1 ? newTemplateSettings.routing.rules[oldRuleIndex1] = rules[1] : newTemplateSettings.routing.rules.push(rules[1]);
+
+              // Now trigger the setter
+              this.templateSettings = newTemplateSettings;
+              this.routingRuleSettings = JSON.stringify(this.templateSettings.routing.rules);
             }
             reverseModal.close();
           },
@@ -715,7 +859,7 @@
       },
       deleteReverse(index) {
         oldData = this.reverseData[index];
-        newTemplateSettings = this.templateSettings;
+        const newTemplateSettings = JSON.parse(JSON.stringify(this.templateSettings));
         reverseTypeObj = newTemplateSettings.reverse[oldData.type + 's'];
         realIndex = reverseTypeObj.findIndex(r => r.tag == oldData.tag && r.domain == oldData.domain);
         newTemplateSettings.reverse[oldData.type + 's'].splice(realIndex, 1);
@@ -752,11 +896,19 @@
         }
       },
       async resetOutboundTraffic(index) {
+        if (!this.selectedSlaveId) {
+          this.$message.error('请先选择一个Slave节点');
+          return;
+        }
+
         let tag = "-alltags-";
         if (index >= 0) {
           tag = this.outboundData[index].tag ? this.outboundData[index].tag : ""
         }
-        const msg = await HttpUtil.post("/panel/xray/resetOutboundsTraffic", { tag: tag });
+        const msg = await HttpUtil.post("/panel/xray/resetOutboundsTraffic", {
+          tag: tag,
+          slaveId: this.selectedSlaveId
+        });
         if (msg.success) {
           await this.refreshOutboundTraffic();
         }
@@ -774,7 +926,7 @@
           },
           confirm: (balancer) => {
             balancerModal.loading();
-            newTemplateSettings = this.templateSettings;
+            const newTemplateSettings = JSON.parse(JSON.stringify(this.templateSettings));
             if (newTemplateSettings.routing.balancers == undefined) {
               newTemplateSettings.routing.balancers = [];
             }
@@ -806,7 +958,7 @@
           balancer: this.balancersData[index],
           confirm: (balancer) => {
             balancerModal.loading();
-            newTemplateSettings = this.templateSettings;
+            const newTemplateSettings = JSON.parse(JSON.stringify(this.templateSettings));
 
             let tmpBalancer = {
               'tag': balancer.tag,
@@ -846,7 +998,7 @@
         });
       },
       updateObservatorySelectors() {
-        newTemplateSettings = this.templateSettings;
+        const newTemplateSettings = JSON.parse(JSON.stringify(this.templateSettings));
         const leastPings = this.balancersData.filter((b) => b.strategy == 'leastPing');
         const leastLoads = this.balancersData.filter((b) =>
           b.strategy === 'leastLoad' ||
@@ -883,7 +1035,7 @@
         this.changeObsCode();
       },
       deleteBalancer(index) {
-        newTemplateSettings = this.templateSettings;
+        const newTemplateSettings = JSON.parse(JSON.stringify(this.templateSettings));
 
         // Remove from balancers
         const removedBalancer = this.balancersData.splice(index, 1)[0];
@@ -972,28 +1124,48 @@
         this.fakeDns = fakeDns;
       },
       addRule() {
+        // Create new routing rule with pre-filled slaveId if available
+        const newRule = {
+          slaveId: this.selectedSlaveId || null,
+          domain: [],
+          ip: [],
+          source: [],
+          user: [],
+          inboundTag: [],
+          protocol: [],
+          outboundTag: ''
+        };
         ruleModal.show({
           title: '{{ i18n "pages.xray.rules.add"}}',
           okText: '{{ i18n "pages.xray.rules.add" }}',
-          confirm: async (rule) => {
+          rule: newRule,
+          confirm: (rule) => {
             ruleModal.loading();
-            const apiRule = { ...rule };
-            // slaveId already in rule from getResult()
-            apiRule.domain = JSON.stringify(apiRule.domain);
-            apiRule.ip = JSON.stringify(apiRule.ip);
-            apiRule.source = JSON.stringify(apiRule.source);
-            apiRule.user = JSON.stringify(apiRule.user);
-            apiRule.inboundTag = JSON.stringify(apiRule.inboundTag);
-            apiRule.protocol = JSON.stringify(apiRule.protocol);
-            // apiRule.attrs = JSON.stringify(apiRule.attrs);
 
-            const msg = await HttpUtil.post("/panel/api/routing/add", apiRule);
-            if (msg.success) {
-              await this.getDBRoutingRules();
-              ruleModal.close();
-            } else {
-              ruleModal.loading(false);
+            // If we have selectedSlaveId, ensure it's set on the rule
+            if (this.selectedSlaveId) {
+              rule.slaveId = this.selectedSlaveId;
             }
+
+            if (!rule.slaveId) {
+              this.$message.error('请选择一个Slave节点');
+              ruleModal.loading(false);
+              return;
+            }
+
+            // Add to local array with temporary ID and mark as pending
+            const localRule = {
+              ...rule,
+              id: Date.now(), // Temporary ID
+              _pendingAction: 'add' // Mark as pending add
+            };
+            this.dbRoutingRules.push(localRule);
+
+            // Enable save button
+            this.saveBtnDisable = false;
+
+            this.$message.success('路由规则已添加，请点击保存按钮提交更改');
+            ruleModal.close();
           },
           isEdit: false
         });
@@ -1002,34 +1174,53 @@
         ruleModal.show({
           title: '{{ i18n "pages.xray.rules.edit"}} ' + (index + 1),
           rule: this.dbRoutingRules[index],
-          confirm: async (rule) => {
+          confirm: (rule) => {
             ruleModal.loading();
-            const apiRule = { ...this.dbRoutingRules[index], ...rule }; // Merge original data with form data
-            // slaveId already in rule from getResult()
-            apiRule.domain = JSON.stringify(apiRule.domain);
-            apiRule.ip = JSON.stringify(apiRule.ip);
-            apiRule.source = JSON.stringify(apiRule.source);
-            apiRule.user = JSON.stringify(apiRule.user);
-            apiRule.inboundTag = JSON.stringify(apiRule.inboundTag);
-            apiRule.protocol = JSON.stringify(apiRule.protocol);
 
-            const msg = await HttpUtil.post("/panel/api/routing/update", apiRule);
-            if (msg.success) {
-              await this.getDBRoutingRules();
-              ruleModal.close();
-            } else {
-              ruleModal.loading(false);
-            }
+            // Update local array and mark as modified
+            const updatedRule = {
+              ...this.dbRoutingRules[index],
+              ...rule,
+              _pendingAction: this.dbRoutingRules[index]._pendingAction || 'update' // Mark as pending update
+            };
+            this.$set(this.dbRoutingRules, index, updatedRule);
+
+            // Enable save button
+            this.saveBtnDisable = false;
+
+            this.$message.success('路由规则已修改，请点击保存按钮提交更改');
+            ruleModal.close();
           },
           isEdit: true
         });
       },
       replaceRule(old_index, new_index) {
-        // rules = this.templateSettings.routing.rules;
-        // if (new_index >= rules.length) rules.push(undefined);
-        // rules.splice(new_index, 0, rules.splice(old_index, 1)[0]);
-        // this.routingRuleSettings = JSON.stringify(rules);
-        console.log("Sorting not implemented yet in DB mode");
+        // Handle DB-backed routing rules sorting
+        if (old_index === new_index) return;
+
+        // Reorder the array
+        const rules = [...this.dbRoutingRules];
+        const [movedRule] = rules.splice(old_index, 1);
+        rules.splice(new_index, 0, movedRule);
+
+        // Update sort values and mark affected rules as needing update
+        const minIndex = Math.min(old_index, new_index);
+        const maxIndex = Math.max(old_index, new_index);
+
+        for (let i = minIndex; i <= maxIndex; i++) {
+          rules[i].sort = i;
+          // Only mark as 'update' if it's not already a pending 'add'
+          if (rules[i]._pendingAction !== 'add') {
+            rules[i]._pendingAction = 'update';
+          }
+        }
+
+        this.dbRoutingRules = rules;
+
+        // Enable save button
+        this.saveBtnDisable = false;
+
+        console.log(`Routing rules reordered: moved index ${old_index} to ${new_index}`);
       },
       deleteRule(index) {
         const rule = this.dbRoutingRules[index];
@@ -1038,11 +1229,20 @@
           content: '{{ i18n "pages.xray.rules.deleteRuleContent"}}',
           okText: '{{ i18n "sure"}}',
           cancelText: '{{ i18n "cancel"}}',
-          onOk: async () => {
-            const msg = await HttpUtil.post("/panel/api/routing/del/" + rule.id);
-            if (msg.success) {
-              await this.getDBRoutingRules();
+          onOk: () => {
+            // If it's a pending add, just remove it from array
+            if (rule._pendingAction === 'add') {
+              this.dbRoutingRules.splice(index, 1);
+            } else {
+              // Mark as pending delete
+              const deletedRule = { ...rule, _pendingAction: 'delete' };
+              this.$set(this.dbRoutingRules, index, deletedRule);
             }
+
+            // Enable save button
+            this.saveBtnDisable = false;
+
+            this.$message.success('路由规则已标记删除，请点击保存按钮提交更改');
           }
         });
       },
@@ -1052,8 +1252,22 @@
           this.slaves = msg.obj;
         }
       },
+      async getDBInbounds() {
+        let url = "/panel/api/inbounds/list";
+        if (this.selectedSlaveId) {
+          url += `?slaveId=${this.selectedSlaveId}`;
+        }
+        const msg = await HttpUtil.get(url);
+        if (msg.success) {
+          this.dbInbounds = msg.obj || [];
+        }
+      },
       async getDBOutbounds() {
-        const msg = await HttpUtil.post("/panel/api/outbounds/list");
+        let url = "/panel/api/outbounds/list";
+        if (this.selectedSlaveId) {
+          url += `?slaveId=${this.selectedSlaveId}`;
+        }
+        const msg = await HttpUtil.get(url);
         if (msg.success) {
           this.dbOutbounds = msg.obj.map(o => {
             return {
@@ -1067,7 +1281,11 @@
         }
       },
       async getDBRoutingRules() {
-        const msg = await HttpUtil.post("/panel/api/routing/list");
+        let url = "/panel/api/routing/list";
+        if (this.selectedSlaveId) {
+          url += `?slaveId=${this.selectedSlaveId}`;
+        }
+        const msg = await HttpUtil.get(url);
         if (msg.success) {
           this.dbRoutingRules = msg.obj.map(r => {
             return {
@@ -1084,6 +1302,7 @@
       },
       async refreshDBData() {
         this.loadingStates.spinning = true;
+        await this.getDBInbounds();
         await this.getDBOutbounds();
         await this.getDBRoutingRules();
         this.loadingStates.spinning = false;
@@ -1104,11 +1323,14 @@
 
       if (slaveIdParam !== null) {
         this.selectedSlaveId = parseInt(slaveIdParam);
+        console.log('Parsed slaveId from URL:', slaveIdParam, '=> selectedSlaveId:', this.selectedSlaveId);
         if (slaveNameParam) {
           this.selectedSlaveName = decodeURIComponent(slaveNameParam);
         } else {
           this.selectedSlaveName = `Slave ${this.selectedSlaveId}`;
         }
+      } else {
+        console.log('No slaveId parameter in URL');
       }
 
       // Continue with existing initialization
@@ -1119,6 +1341,7 @@
       await this.getXrayResult();
       await this.getOutboundsTraffic();
       await this.getSlaves();
+      await this.getDBInbounds();
       await this.getDBOutbounds();
       await this.getDBRoutingRules();
 
@@ -1134,7 +1357,24 @@
 
       while (true) {
         await PromiseUtil.sleep(800);
-        this.saveBtnDisable = this.oldXraySetting === this.xraySetting;
+        const oldDisable = this.saveBtnDisable;
+
+        // Check if xraySetting changed
+        const xraySettingChanged = this.oldXraySetting !== this.xraySetting;
+
+        // Check if there are pending routing rule changes
+        const hasPendingRules = this.dbRoutingRules && this.dbRoutingRules.some(r => r._pendingAction);
+
+        // Check if there are pending outbound changes
+        const hasPendingOutbounds = this.dbOutbounds && this.dbOutbounds.some(o => o._pendingAction);
+
+        // Save button should be enabled if ANY of these conditions is true
+        this.saveBtnDisable = !xraySettingChanged && !hasPendingRules && !hasPendingOutbounds;
+
+        if (oldDisable !== this.saveBtnDisable) {
+          console.log('Save button state changed:', this.saveBtnDisable ? 'DISABLED' : 'ENABLED');
+          console.log('xraySettingChanged:', xraySettingChanged, 'hasPendingRules:', hasPendingRules, 'hasPendingOutbounds:', hasPendingOutbounds);
+        }
       }
     },
     computed: {
@@ -1152,7 +1392,7 @@
       inboundSettings: {
         get: function () { return this.templateSettings ? JSON.stringify(this.templateSettings.inbounds, null, 2) : null; },
         set: function (newValue) {
-          newTemplateSettings = this.templateSettings;
+          const newTemplateSettings = JSON.parse(JSON.stringify(this.templateSettings));
           newTemplateSettings.inbounds = JSON.parse(newValue);
           this.templateSettings = newTemplateSettings;
         },
@@ -1160,7 +1400,7 @@
       outboundSettings: {
         get: function () { return this.templateSettings ? JSON.stringify(this.templateSettings.outbounds, null, 2) : null; },
         set: function (newValue) {
-          newTemplateSettings = this.templateSettings;
+          const newTemplateSettings = JSON.parse(JSON.stringify(this.templateSettings));
           newTemplateSettings.outbounds = JSON.parse(newValue);
           this.templateSettings = newTemplateSettings;
         },
@@ -1191,7 +1431,7 @@
       routingRuleSettings: {
         get: function () { return this.templateSettings ? JSON.stringify(this.templateSettings.routing.rules, null, 2) : null; },
         set: function (newValue) {
-          newTemplateSettings = this.templateSettings;
+          const newTemplateSettings = JSON.parse(JSON.stringify(this.templateSettings));
           newTemplateSettings.routing.rules = JSON.parse(newValue);
           this.templateSettings = newTemplateSettings;
         },
@@ -1234,7 +1474,7 @@
           return this.templateSettings?.observatory ? JSON.stringify(this.templateSettings.observatory, null, 2) : null;
         },
         set: function (newValue) {
-          newTemplateSettings = this.templateSettings;
+          const newTemplateSettings = JSON.parse(JSON.stringify(this.templateSettings));
           newTemplateSettings.observatory = JSON.parse(newValue);
           this.templateSettings = newTemplateSettings;
         },
@@ -1244,7 +1484,7 @@
           return this.templateSettings?.burstObservatory ? JSON.stringify(this.templateSettings.burstObservatory, null, 2) : null;
         },
         set: function (newValue) {
-          newTemplateSettings = this.templateSettings;
+          const newTemplateSettings = JSON.parse(JSON.stringify(this.templateSettings));
           newTemplateSettings.burstObservatory = JSON.parse(newValue);
           this.templateSettings = newTemplateSettings;
         },
@@ -1260,7 +1500,7 @@
           return freedomOutbound.settings.domainStrategy;
         },
         set: function (newValue) {
-          newTemplateSettings = this.templateSettings;
+          const newTemplateSettings = JSON.parse(JSON.stringify(this.templateSettings));
           freedomOutboundIndex = newTemplateSettings.outbounds.findIndex((o) => o.protocol === "freedom" && o.tag == "direct");
           if (freedomOutboundIndex == -1) {
             newTemplateSettings.outbounds.push({ protocol: "freedom", tag: "direct", settings: { "domainStrategy": newValue } });
@@ -1278,7 +1518,7 @@
           return this.templateSettings.routing.domainStrategy;
         },
         set: function (newValue) {
-          newTemplateSettings = this.templateSettings;
+          const newTemplateSettings = JSON.parse(JSON.stringify(this.templateSettings));
           newTemplateSettings.routing.domainStrategy = newValue;
           this.templateSettings = newTemplateSettings;
         }
@@ -1289,7 +1529,7 @@
           return this.templateSettings.log.loglevel;
         },
         set: function (newValue) {
-          newTemplateSettings = this.templateSettings;
+          const newTemplateSettings = JSON.parse(JSON.stringify(this.templateSettings));
           newTemplateSettings.log.loglevel = newValue;
           this.templateSettings = newTemplateSettings;
         }
@@ -1300,7 +1540,7 @@
           return this.templateSettings.log.access;
         },
         set: function (newValue) {
-          newTemplateSettings = this.templateSettings;
+          const newTemplateSettings = JSON.parse(JSON.stringify(this.templateSettings));
           newTemplateSettings.log.access = newValue;
           this.templateSettings = newTemplateSettings;
         }
@@ -1311,7 +1551,7 @@
           return this.templateSettings.log.error;
         },
         set: function (newValue) {
-          newTemplateSettings = this.templateSettings;
+          const newTemplateSettings = JSON.parse(JSON.stringify(this.templateSettings));
           newTemplateSettings.log.error = newValue;
           this.templateSettings = newTemplateSettings;
         }
@@ -1322,7 +1562,7 @@
           return this.templateSettings.log.dnsLog;
         },
         set: function (newValue) {
-          newTemplateSettings = this.templateSettings;
+          const newTemplateSettings = JSON.parse(JSON.stringify(this.templateSettings));
           newTemplateSettings.log.dnsLog = newValue;
           this.templateSettings = newTemplateSettings;
         }
@@ -1333,7 +1573,7 @@
           return this.templateSettings.policy.system.statsInboundUplink;
         },
         set: function (newValue) {
-          newTemplateSettings = this.templateSettings;
+          const newTemplateSettings = JSON.parse(JSON.stringify(this.templateSettings));
           newTemplateSettings.policy.system.statsInboundUplink = newValue;
           this.templateSettings = newTemplateSettings;
         }
@@ -1344,7 +1584,7 @@
           return this.templateSettings.policy.system.statsInboundDownlink;
         },
         set: function (newValue) {
-          newTemplateSettings = this.templateSettings;
+          const newTemplateSettings = JSON.parse(JSON.stringify(this.templateSettings));
           newTemplateSettings.policy.system.statsInboundDownlink = newValue;
           this.templateSettings = newTemplateSettings;
         }
@@ -1355,7 +1595,7 @@
           return this.templateSettings.policy.system.statsOutboundUplink;
         },
         set: function (newValue) {
-          newTemplateSettings = this.templateSettings;
+          const newTemplateSettings = JSON.parse(JSON.stringify(this.templateSettings));
           newTemplateSettings.policy.system.statsOutboundUplink = newValue;
           this.templateSettings = newTemplateSettings;
         }
@@ -1366,7 +1606,7 @@
           return this.templateSettings.policy.system.statsOutboundDownlink;
         },
         set: function (newValue) {
-          newTemplateSettings = this.templateSettings;
+          const newTemplateSettings = JSON.parse(JSON.stringify(this.templateSettings));
           newTemplateSettings.policy.system.statsOutboundDownlink = newValue;
           this.templateSettings = newTemplateSettings;
         }
@@ -1377,7 +1617,7 @@
           return this.templateSettings.log.maskAddress;
         },
         set: function (newValue) {
-          newTemplateSettings = this.templateSettings;
+          const newTemplateSettings = JSON.parse(JSON.stringify(this.templateSettings));
           newTemplateSettings.log.maskAddress = newValue;
           this.templateSettings = newTemplateSettings;
         }
@@ -1463,7 +1703,7 @@
           return this.templateSettings ? this.templateSettings.dns != null : false;
         },
         set: function (newValue) {
-          newTemplateSettings = this.templateSettings;
+          const newTemplateSettings = JSON.parse(JSON.stringify(this.templateSettings));
           if (newValue) {
             newTemplateSettings.dns = {
               servers: [],
@@ -1484,7 +1724,7 @@
           return this.enableDNS ? this.templateSettings.dns.tag : "";
         },
         set: function (newValue) {
-          newTemplateSettings = this.templateSettings;
+          const newTemplateSettings = JSON.parse(JSON.stringify(this.templateSettings));
           newTemplateSettings.dns.tag = newValue;
           this.templateSettings = newTemplateSettings;
         }
@@ -1494,7 +1734,7 @@
           return this.enableDNS ? this.templateSettings.dns.clientIp : null;
         },
         set: function (newValue) {
-          newTemplateSettings = this.templateSettings;
+          const newTemplateSettings = JSON.parse(JSON.stringify(this.templateSettings));
           if (newValue) {
             newTemplateSettings.dns.clientIp = newValue;
           } else {
@@ -1508,7 +1748,7 @@
           return this.enableDNS ? this.templateSettings.dns.disableCache : false;
         },
         set: function (newValue) {
-          newTemplateSettings = this.templateSettings;
+          const newTemplateSettings = JSON.parse(JSON.stringify(this.templateSettings));
           if (newValue) {
             newTemplateSettings.dns.disableCache = newValue;
           } else {
@@ -1522,7 +1762,7 @@
           return this.enableDNS ? this.templateSettings.dns.disableFallback : false;
         },
         set: function (newValue) {
-          newTemplateSettings = this.templateSettings;
+          const newTemplateSettings = JSON.parse(JSON.stringify(this.templateSettings));
           if (newValue) {
             newTemplateSettings.dns.disableFallback = newValue;
           } else {
@@ -1536,7 +1776,7 @@
           return this.enableDNS ? this.templateSettings.dns.disableFallbackIfMatch : false;
         },
         set: function (newValue) {
-          newTemplateSettings = this.templateSettings;
+          const newTemplateSettings = JSON.parse(JSON.stringify(this.templateSettings));
           if (newValue) {
             newTemplateSettings.dns.disableFallbackIfMatch = newValue;
           } else {
@@ -1550,7 +1790,7 @@
           return this.enableDNS ? (this.templateSettings.dns.enableParallelQuery || false) : false;
         },
         set: function (newValue) {
-          newTemplateSettings = this.templateSettings;
+          const newTemplateSettings = JSON.parse(JSON.stringify(this.templateSettings));
           if (newValue) {
             newTemplateSettings.dns.enableParallelQuery = newValue;
           } else {
@@ -1564,7 +1804,7 @@
           return this.enableDNS ? this.templateSettings.dns.useSystemHosts : false;
         },
         set: function (newValue) {
-          newTemplateSettings = this.templateSettings;
+          const newTemplateSettings = JSON.parse(JSON.stringify(this.templateSettings));
           if (newValue) {
             newTemplateSettings.dns.useSystemHosts = newValue;
           } else {
@@ -1578,7 +1818,7 @@
           return this.enableDNS ? this.templateSettings.dns.queryStrategy : null;
         },
         set: function (newValue) {
-          newTemplateSettings = this.templateSettings;
+          const newTemplateSettings = JSON.parse(JSON.stringify(this.templateSettings));
           newTemplateSettings.dns.queryStrategy = newValue;
           this.templateSettings = newTemplateSettings;
         }
@@ -1586,7 +1826,7 @@
       dnsServers: {
         get: function () { return this.enableDNS ? this.templateSettings.dns.servers : []; },
         set: function (newValue) {
-          newTemplateSettings = this.templateSettings;
+          const newTemplateSettings = JSON.parse(JSON.stringify(this.templateSettings));
           newTemplateSettings.dns.servers = newValue;
           this.templateSettings = newTemplateSettings;
         }
@@ -1594,7 +1834,7 @@
       fakeDns: {
         get: function () { return this.templateSettings && this.templateSettings.fakedns ? this.templateSettings.fakedns : []; },
         set: function (newValue) {
-          newTemplateSettings = this.templateSettings;
+          const newTemplateSettings = JSON.parse(JSON.stringify(this.templateSettings));
           if (this.enableDNS) {
             newTemplateSettings.fakedns = newValue.length > 0 ? newValue : null;
           } else {

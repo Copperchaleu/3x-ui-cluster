@@ -59,7 +59,18 @@ func (a *InboundController) initRouter(g *gin.RouterGroup) {
 // getInbounds retrieves the list of inbounds for the logged-in user.
 func (a *InboundController) getInbounds(c *gin.Context) {
 	user := session.GetLoginUser(c)
-	inbounds, err := a.inboundService.GetInbounds(user.Id)
+	slaveIdStr := c.DefaultQuery("slaveId", "-1")
+	slaveId, _ := strconv.Atoi(slaveIdStr)
+	
+	var inbounds []*model.Inbound
+	var err error
+	
+	if slaveId == -1 {
+		inbounds, err = a.inboundService.GetInbounds(user.Id)
+	} else {
+		inbounds, err = a.inboundService.GetInboundsForSlave(slaveId)
+	}
+	
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.obtain"), err)
 		return

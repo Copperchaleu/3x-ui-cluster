@@ -33,6 +33,13 @@
                     <span v-if="text">[[ text ]]</span>
                     <span v-else>-</span>
                 </template>
+                <template slot="traffic" slot-scope="text, record">
+                    <div v-if="record.totalUplink || record.totalDownlink">
+                        <div>↑ [[ formatBytes(record.totalUplink) ]]</div>
+                        <div>↓ [[ formatBytes(record.totalDownlink) ]]</div>
+                    </div>
+                    <span v-else>-</span>
+                </template>
             </a-table>
         </a-card>
       </a-spin>
@@ -77,6 +84,7 @@
                 { title: '{{ i18n "pages.slaves.status" }}', dataIndex: 'status', scopedSlots: { customRender: 'status' }, width: '100px' },
                 { title: '{{ i18n "pages.slaves.version" }}', dataIndex: 'version', key: 'version', width: '120px' },
                 { title: 'System Stats', dataIndex: 'systemStats', scopedSlots: { customRender: 'systemStats' } },
+                { title: 'Traffic (↑/↓)', key: 'traffic', scopedSlots: { customRender: 'traffic' }, width: '180px' },
                 { title: 'Action', key: 'action', scopedSlots: { customRender: 'action' }, width: '280px' }
             ],
             addSlaveModal: {
@@ -176,6 +184,13 @@
                         this.$message.error(res.msg);
                     }
                 });
+            },
+            formatBytes(bytes) {
+                if (!bytes || bytes === 0) return '0 B';
+                const k = 1024;
+                const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
             }
         }
     });

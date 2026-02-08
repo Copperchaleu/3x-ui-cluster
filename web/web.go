@@ -301,12 +301,7 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 func (s *Server) startTask() {
 	// Master is panel-only - no local Xray startup
 	// All Xray operations are handled by slave agents
-
-	go func() {
-		time.Sleep(time.Second * 5)
-		// Statistics every 10 seconds for slave traffic monitoring
-		s.cron.AddJob("@every 10s", job.NewXrayTrafficJob())
-	}()
+	// Traffic statistics collected via Slave WebSocket messages
 
 	// check client ips from log file every 10 sec
 	s.cron.AddJob("@every 10s", job.NewCheckClientIpJob())

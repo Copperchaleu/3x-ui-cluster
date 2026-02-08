@@ -1,6 +1,10 @@
 package controller
 
 import (
+	"fmt"
+	"strconv"
+
+	"github.com/mhsanaei/3x-ui/v2/database/model"
 	"github.com/mhsanaei/3x-ui/v2/web/service"
 
 	"github.com/gin-gonic/gin"
@@ -8,12 +12,13 @@ import (
 
 // XraySettingController handles Xray configuration and settings operations.
 type XraySettingController struct {
-	XraySettingService service.XraySettingService
-	SettingService     service.SettingService
-	InboundService     service.InboundService
-	OutboundService    service.OutboundService
-	XrayService        service.XrayService
-	WarpService        service.WarpService
+	XraySettingService  service.XraySettingService
+	SlaveSettingService service.SlaveSettingService
+	SettingService      service.SettingService
+	InboundService      service.InboundService
+	OutboundService     service.OutboundService
+	XrayService         service.XrayService
+	WarpService         service.WarpService
 }
 
 // NewXraySettingController creates a new XraySettingController and initializes its routes.
@@ -38,7 +43,16 @@ func (a *XraySettingController) initRouter(g *gin.RouterGroup) {
 
 // getXraySetting retrieves the Xray configuration template and inbound tags.
 func (a *XraySettingController) getXraySetting(c *gin.Context) {
-	xraySetting, err := a.SettingService.GetXrayConfigTemplate()
+	slaveIdStr := c.PostForm("slaveId")
+	slaveId, _ := strconv.Atoi(slaveIdStr)
+	
+	if slaveId <= 0 {
+		jsonMsg(c, "请选择一个Slave节点", fmt.Errorf("slaveId is required"))
+		return
+	}
+	
+	// Use SlaveSettingService to get per-slave configuration
+	xraySetting, err := a.SlaveSettingService.GetXrayConfigForSlave(slaveId)
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.getSettings"), err)
 		return
@@ -54,8 +68,24 @@ func (a *XraySettingController) getXraySetting(c *gin.Context) {
 
 // updateSetting updates the Xray configuration settings.
 func (a *XraySettingController) updateSetting(c *gin.Context) {
+	slaveIdStr := c.PostForm("slaveId")
+	slaveId, _ := strconv.Atoi(slaveIdStr)
+	
+	if slaveId <= 0 {
+		jsonMsg(c, "请选择一个Slave节点", fmt.Errorf("slaveId is required"))
+		return
+	}
+	
+	// Use SlaveSettingService to save per-slave configuration
 	xraySetting := c.PostForm("xraySetting")
-	err := a.XraySettingService.SaveXraySetting(xraySetting)
+	
+	// Validate config first
+	if err := a.XraySettingService.CheckXrayConfig(xraySetting); err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
+		return
+	}
+	
+	err := a.SlaveSettingService.SaveXrayConfigForSlave(slaveId, xraySetting)
 	jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
 }
 
@@ -100,7 +130,18 @@ func (a *XraySettingController) warp(c *gin.Context) {
 
 // getOutboundsTraffic retrieves the traffic statistics for outbounds.
 func (a *XraySettingController) getOutboundsTraffic(c *gin.Context) {
-	outboundsTraffic, err := a.OutboundService.GetOutboundsTraffic()
+	slaveIdStr := c.DefaultQuery("slaveId", "-1")
+	slaveId, _ := strconv.Atoi(slaveIdStr)
+	
+	var outboundsTraffic []*model.OutboundTraffics
+	var err error
+	
+	if slaveId == -1 {
+		outboundsTraffic, err = a.OutboundService.GetOutboundsTraffic()
+	} else {
+		outboundsTraffic, err = a.OutboundService.GetOutboundsTrafficForSlave(slaveId)
+	}
+	
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.getOutboundTrafficError"), err)
 		return
@@ -111,7 +152,15 @@ func (a *XraySettingController) getOutboundsTraffic(c *gin.Context) {
 // resetOutboundsTraffic resets the traffic statistics for the specified outbound tag.
 func (a *XraySettingController) resetOutboundsTraffic(c *gin.Context) {
 	tag := c.PostForm("tag")
-	err := a.OutboundService.ResetOutboundTraffic(tag)
+	slaveIdStr := c.PostForm("slaveId")
+	slaveId, _ := strconv.Atoi(slaveIdStr)
+	
+	if slaveId <= 0 {
+		jsonMsg(c, "请选择一个Slave节点", fmt.Errorf("slaveId is required"))
+		return
+	}
+	
+	err := a.OutboundService.ResetOutboundTrafficForSlave(slaveId, tag)
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.resetOutboundTrafficError"), err)
 		return

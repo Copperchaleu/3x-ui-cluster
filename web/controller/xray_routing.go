@@ -20,7 +20,7 @@ func NewRoutingController(g *gin.RouterGroup) *RoutingController {
 }
 
 func (a *RoutingController) initRouter(g *gin.RouterGroup) {
-	g.POST("/list", a.getRoutingRules)
+	g.GET("/list", a.getRoutingRules)
 	g.POST("/add", a.addRoutingRule)
 	g.POST("/update", a.updateRoutingRule)
 	g.POST("/del/:id", a.deleteRoutingRule)
