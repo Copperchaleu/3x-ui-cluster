@@ -72,7 +72,7 @@ func GetAccessPersistentPrevLogPath() string {
 func GetAccessLogPath() (string, error) {
 	config, err := os.ReadFile(GetConfigPath())
 	if err != nil {
-		logger.Warningf("Failed to read configuration file: %s", err)
+		// In Master-only mode, config.json doesn't exist - this is expected
 		return "", err
 	}
 

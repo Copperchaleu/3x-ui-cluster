@@ -591,7 +591,9 @@ func (s *SettingService) SetExternalTrafficInformURI(InformURI string) error {
 func (s *SettingService) GetIpLimitEnable() (bool, error) {
 	accessLogPath, err := xray.GetAccessLogPath()
 	if err != nil {
-		return false, err
+		// In Master-only mode, config.json doesn't exist - this is expected
+		// IP limit feature requires local Xray which Master doesn't run
+		return false, nil
 	}
 	return (accessLogPath != "none" && accessLogPath != ""), nil
 }
