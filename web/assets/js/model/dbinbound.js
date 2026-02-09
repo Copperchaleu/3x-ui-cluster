@@ -66,6 +66,9 @@ class DBInbound {
     }
 
     get defaultAddress() {
+        if (!ObjectUtil.isEmpty(this.address)) {
+            return this.address;
+        }
         let address = location.hostname;
         if (!ObjectUtil.isEmpty(this.listen) && this.listen !== "0.0.0.0") {
             address = this.listen;
