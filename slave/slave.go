@@ -3,6 +3,8 @@ package slave
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/signal"
 	"strings"
@@ -171,7 +173,39 @@ func (s *Slave) collectStats() string {
 		cpuVal = c[0]
 	}
 
-	return fmt.Sprintf(`{"cpu": %.2f, "mem": %.2f}`, cpuVal, v.UsedPercent)
+	ip := s.getPublicIP()
+	return fmt.Sprintf(`{"cpu": %.2f, "mem": %.2f, "address": "%s"}`, cpuVal, v.UsedPercent, ip)
+}
+
+// getPublicIP fetches the public IP address of this slave
+func (s *Slave) getPublicIP() string {
+	// Try multiple services for reliability
+	services := []string{
+		"https://api.ipify.org",
+		"https://ifconfig.me/ip",
+		"https://icanhazip.com",
+	}
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	for _, url := range services {
+		resp, err := client.Get(url)
+		if err != nil {
+			continue
+		}
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			continue
+		}
+
+		ip := strings.TrimSpace(string(body))
+		if ip != "" {
+			return ip
+		}
+	}
+
+	return ""
 }
 
 func (s *Slave) collectTrafficStats() string {

@@ -1,5 +1,6 @@
 {{define "modals/inboundInfoModal"}}
-<a-modal id="inbound-info-modal" v-model="infoModal.visible" title='{{ i18n "pages.inbounds.details"}}' :closable="true" :mask-closable="true" :footer="null" width="600px" :class="themeSwitcher.currentTheme">
+<a-modal id="inbound-info-modal" v-model="infoModal.visible" title='{{ i18n "pages.inbounds.details"}}' :closable="true"
+  :mask-closable="true" :footer="null" width="600px" :class="themeSwitcher.currentTheme">
   <a-row>
     <a-col :xs="24" :md="12">
       <table>
@@ -12,8 +13,8 @@
         <tr>
           <td>{{ i18n "pages.inbounds.address" }}</td>
           <td>
-            <a-tooltip :title="[[ dbInbound.address ]]">
-              <a-tag class="info-large-tag">[[ dbInbound.address ]]</a-tag>
+            <a-tooltip :title="[[ dbInbound.defaultAddress ]]">
+              <a-tag class="info-large-tag">[[ dbInbound.defaultAddress ]]</a-tag>
             </a-tooltip>
           </td>
         </tr>
@@ -102,14 +103,16 @@
       <a-tag :color="inbound.stream.security == 'none' ? 'red' : 'green'">[[ inbound.stream.security ]]</a-tag>
       <br />
       <td>Authentication</td>
-        <a-tag v-if="inbound.settings.selectedAuth" color="green">[[ inbound.settings.selectedAuth ? inbound.settings.selectedAuth : '' ]]</a-tag>
-        <a-tag v-else color="red">{{ i18n "none" }}</a-tag>
+      <a-tag v-if="inbound.settings.selectedAuth" color="green">[[ inbound.settings.selectedAuth ?
+        inbound.settings.selectedAuth : '' ]]</a-tag>
+      <a-tag v-else color="red">{{ i18n "none" }}</a-tag>
       <br />
       {{ i18n "encryption" }}
-        <a-tag class="info-large-tag" :color="inbound.settings.encryption ? 'green' : 'red'">[[ inbound.settings.encryption ? inbound.settings.encryption : '' ]]</a-tag>
-        <a-tooltip title='{{ i18n "copy" }}'>
-          <a-button size="small" icon="snippets" @click="copy(inbound.settings.encryption)"></a-button>
-        </a-tooltip>
+      <a-tag class="info-large-tag" :color="inbound.settings.encryption ? 'green' : 'red'">[[
+        inbound.settings.encryption ? inbound.settings.encryption : '' ]]</a-tag>
+      <a-tooltip title='{{ i18n "copy" }}'>
+        <a-button size="small" icon="snippets" @click="copy(inbound.settings.encryption)"></a-button>
+      </a-tooltip>
       <br />
       <template v-if="inbound.stream.security != 'none'">
         {{ i18n "domainName" }}
@@ -191,8 +194,10 @@
         <tr v-if="infoModal.clientStats">
           <td>{{ i18n "usage" }}</td>
           <td>
-            <a-tag color="green">[[ SizeFormatter.sizeFormat(infoModal.clientStats.up + infoModal.clientStats.down) ]]</a-tag>
-            <a-tag>↑ [[ SizeFormatter.sizeFormat(infoModal.clientStats.up) ]] / [[ SizeFormatter.sizeFormat(infoModal.clientStats.down) ]] ↓</a-tag>
+            <a-tag color="green">[[ SizeFormatter.sizeFormat(infoModal.clientStats.up + infoModal.clientStats.down)
+              ]]</a-tag>
+            <a-tag>↑ [[ SizeFormatter.sizeFormat(infoModal.clientStats.up) ]] / [[
+              SizeFormatter.sizeFormat(infoModal.clientStats.down) ]] ↓</a-tag>
           </td>
         </tr>
         <tr>
@@ -220,7 +225,8 @@
         <tr>
           <td>{{ i18n "lastOnline" }}</td>
           <td>
-            <a-tag>[[ app.formatLastOnline(infoModal.clientSettings && infoModal.clientSettings.email ? infoModal.clientSettings.email : '') ]]</a-tag>
+            <a-tag>[[ app.formatLastOnline(infoModal.clientSettings && infoModal.clientSettings.email ?
+              infoModal.clientSettings.email : '') ]]</a-tag>
           </td>
         </tr>
         <tr v-if="infoModal.clientSettings.comment">
@@ -259,27 +265,35 @@
         </tr>
         <tr>
           <td>
-            <a-tag v-if="infoModal.clientStats && infoModal.clientSettings.totalGB > 0" :color="statsColor(infoModal.clientStats)"> [[ getRemStats() ]] </a-tag>
+            <a-tag v-if="infoModal.clientStats && infoModal.clientSettings.totalGB > 0"
+              :color="statsColor(infoModal.clientStats)"> [[ getRemStats() ]] </a-tag>
           </td>
           <td>
-            <a-tag v-if="infoModal.clientSettings.totalGB > 0" :color="statsColor(infoModal.clientStats)"> [[ SizeFormatter.sizeFormat(infoModal.clientSettings.totalGB) ]] </a-tag>
+            <a-tag v-if="infoModal.clientSettings.totalGB > 0" :color="statsColor(infoModal.clientStats)"> [[
+              SizeFormatter.sizeFormat(infoModal.clientSettings.totalGB) ]] </a-tag>
             <a-tag v-else color="purple" class="infinite-tag">
               <svg height="10px" width="14px" viewBox="0 0 640 512" fill="currentColor">
-                <path d="M484.4 96C407 96 349.2 164.1 320 208.5C290.8 164.1 233 96 155.6 96C69.75 96 0 167.8 0 256s69.75 160 155.6 160C233.1 416 290.8 347.9 320 303.5C349.2 347.9 407 416 484.4 416C570.3 416 640 344.2 640 256S570.3 96 484.4 96zM155.6 368C96.25 368 48 317.8 48 256s48.25-112 107.6-112c67.75 0 120.5 82.25 137.1 112C276 285.8 223.4 368 155.6 368zM484.4 368c-67.75 0-120.5-82.25-137.1-112C364 226.2 416.6 144 484.4 144C543.8 144 592 194.2 592 256S543.8 368 484.4 368z" fill="currentColor"></path>
+                <path
+                  d="M484.4 96C407 96 349.2 164.1 320 208.5C290.8 164.1 233 96 155.6 96C69.75 96 0 167.8 0 256s69.75 160 155.6 160C233.1 416 290.8 347.9 320 303.5C349.2 347.9 407 416 484.4 416C570.3 416 640 344.2 640 256S570.3 96 484.4 96zM155.6 368C96.25 368 48 317.8 48 256s48.25-112 107.6-112c67.75 0 120.5 82.25 137.1 112C276 285.8 223.4 368 155.6 368zM484.4 368c-67.75 0-120.5-82.25-137.1-112C364 226.2 416.6 144 484.4 144C543.8 144 592 194.2 592 256S543.8 368 484.4 368z"
+                  fill="currentColor"></path>
               </svg>
             </a-tag>
           </td>
           <td>
             <template v-if="infoModal.clientSettings.expiryTime > 0">
-              <a-tag :color="ColorUtils.usageColor(new Date().getTime(), app.expireDiff, infoModal.clientSettings.expiryTime)"> 
+              <a-tag
+                :color="ColorUtils.usageColor(new Date().getTime(), app.expireDiff, infoModal.clientSettings.expiryTime)">
                 [[ IntlUtil.formatDate(infoModal.clientSettings.expiryTime) ]]
               </a-tag>
             </template>
-            <a-tag v-else-if="infoModal.clientSettings.expiryTime < 0" color="green">[[ infoModal.clientSettings.expiryTime / -86400000 ]] {{ i18n "pages.client.days" }}
+            <a-tag v-else-if="infoModal.clientSettings.expiryTime < 0" color="green">[[
+              infoModal.clientSettings.expiryTime / -86400000 ]] {{ i18n "pages.client.days" }}
             </a-tag>
             <a-tag v-else color="purple" class="infinite-tag">
               <svg height="10px" width="14px" viewBox="0 0 640 512" fill="currentColor">
-                <path d="M484.4 96C407 96 349.2 164.1 320 208.5C290.8 164.1 233 96 155.6 96C69.75 96 0 167.8 0 256s69.75 160 155.6 160C233.1 416 290.8 347.9 320 303.5C349.2 347.9 407 416 484.4 416C570.3 416 640 344.2 640 256S570.3 96 484.4 96zM155.6 368C96.25 368 48 317.8 48 256s48.25-112 107.6-112c67.75 0 120.5 82.25 137.1 112C276 285.8 223.4 368 155.6 368zM484.4 368c-67.75 0-120.5-82.25-137.1-112C364 226.2 416.6 144 484.4 144C543.8 144 592 194.2 592 256S543.8 368 484.4 368z" fill="currentColor"></path>
+                <path
+                  d="M484.4 96C407 96 349.2 164.1 320 208.5C290.8 164.1 233 96 155.6 96C69.75 96 0 167.8 0 256s69.75 160 155.6 160C233.1 416 290.8 347.9 320 303.5C349.2 347.9 407 416 484.4 416C570.3 416 640 344.2 640 256S570.3 96 484.4 96zM155.6 368C96.25 368 48 317.8 48 256s48.25-112 107.6-112c67.75 0 120.5 82.25 137.1 112C276 285.8 223.4 368 155.6 368zM484.4 368c-67.75 0-120.5-82.25-137.1-112C364 226.2 416.6 144 484.4 144C543.8 144 592 194.2 592 256S543.8 368 484.4 368z"
+                  fill="currentColor"></path>
               </svg>
             </a-tag>
           </td>
@@ -464,13 +478,16 @@
                 <tr-info-title class="tr-info-title">
                   <a-tag color="blue">Config</a-tag>
                   <a-tooltip title='{{ i18n "copy" }}'>
-                    <a-button :style="{ minWidth: '24px' }" size="small" icon="snippets" @click="copy(infoModal.links[index])"></a-button>
+                    <a-button :style="{ minWidth: '24px' }" size="small" icon="snippets"
+                      @click="copy(infoModal.links[index])"></a-button>
                   </a-tooltip>
                   <a-tooltip title='{{ i18n "download" }}'>
-                    <a-button :style="{ minWidth: '24px' }" size="small" icon="download" @click="FileManager.downloadTextFile(infoModal.links[index], `peer-${index + 1}.conf`)"></a-button>
+                    <a-button :style="{ minWidth: '24px' }" size="small" icon="download"
+                      @click="FileManager.downloadTextFile(infoModal.links[index], `peer-${index + 1}.conf`)"></a-button>
                   </a-tooltip>
                 </tr-info-title>
-                <div v-html="infoModal.links[index].replaceAll(`\n`,`<br />`)" :style="{ borderRadius: '1rem', padding: '0.5rem' }" class="client-table-odd-row">
+                <div v-html="infoModal.links[index].replaceAll(`\n`,`<br />`)"
+                  :style="{ borderRadius: '1rem', padding: '0.5rem' }" class="client-table-odd-row">
                 </div>
               </tr-info-row>
             </td>
@@ -516,9 +533,9 @@
 
       if (
         [
-          Protocols.VMESS, 
+          Protocols.VMESS,
           Protocols.VLESS,
-          Protocols.TROJAN, 
+          Protocols.TROJAN,
           Protocols.SHADOWSOCKS
         ].includes(this.inbound.protocol)
       ) {
@@ -627,7 +644,7 @@
             }
             this.infoModal.clientIps = 'No IP Record';
           })
-          .catch(() => {});
+          .catch(() => { });
       },
     },
   });

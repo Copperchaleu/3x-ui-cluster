@@ -13,6 +13,7 @@ class DBInbound {
         this.expiryTime = 0;
         this.trafficReset = "never";
         this.lastTrafficResetTime = 0;
+        this.address = ""; // Custom domain/IP for subscription links
 
         this.listen = "";
         this.port = 0;
@@ -64,7 +65,7 @@ class DBInbound {
         return this.protocol === Protocols.WIREGUARD;
     }
 
-    get address() {
+    get defaultAddress() {
         let address = location.hostname;
         if (!ObjectUtil.isEmpty(this.listen) && this.listen !== "0.0.0.0") {
             address = this.listen;
@@ -116,6 +117,7 @@ class DBInbound {
             tag: this.tag,
             sniffing: sniffing,
             clientStats: this.clientStats,
+            address: this.address,
         };
         return Inbound.fromJson(config);
     }

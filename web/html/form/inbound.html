@@ -10,7 +10,7 @@
 
     <a-form-item label='{{ i18n "pages.slaves.title" }}' required>
         <a-select v-model="dbInbound.slaveId" :dropdown-class-name="themeSwitcher.currentTheme"
-            placeholder="Select a slave server">
+            placeholder="Select a slave server" @change="onSlaveChange">
             <a-select-option v-for="n in slaves" :key="n.id" :value="n.id">[[ n.name ]]<template v-if="n.address"> ([[
                     n.address ]])</template></a-select-option>
         </a-select>
@@ -59,12 +59,21 @@
             </a-button>
         </a-input-group>
         <template v-if="domainVerifyResult">
-            <a-tag v-if="domainVerifyResult.success" color="green">
-                <a-icon type="check-circle" /> [[ domainVerifyResult.resolvedIP ]]
-            </a-tag>
-            <a-tag v-else color="red">
-                <a-icon type="close-circle" /> [[ domainVerifyResult.msg ]]
-            </a-tag>
+            <a-alert v-if="domainVerifyResult.success" type="success" show-icon style="margin-top: 8px;">
+                <template slot="message">
+                    <span>✓ {{ i18n "verified" }}: [[ domainVerifyResult.resolvedIP ]] → Slave IP: [[
+                        domainVerifyResult.slaveIP ]]</span>
+                </template>
+            </a-alert>
+            <a-alert v-else type="error" show-icon style="margin-top: 8px;">
+                <template slot="message">
+                    <span>✗ {{ i18n "pages.inbounds.verifyFailed" }}: [[ domainVerifyResult.msg ]]</span>
+                </template>
+                <template slot="description" v-if="domainVerifyResult.resolvedIP && domainVerifyResult.slaveIP">
+                    <span>{{ i18n "pages.inbounds.domainResolvesTo" }}: [[ domainVerifyResult.resolvedIP ]], {{ i18n
+                        "pages.inbounds.slaveIP" }}: [[ domainVerifyResult.slaveIP ]]</span>
+                </template>
+            </a-alert>
         </template>
     </a-form-item>
 

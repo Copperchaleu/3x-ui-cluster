@@ -213,11 +213,24 @@ func (s *SlaveService) DeleteSlave(id int) error {
 
 func (s *SlaveService) UpdateSlaveStatus(id int, status string, stats string) error {
     db := database.GetDB()
-    return db.Model(&model.Slave{}).Where("id = ?", id).Updates(map[string]interface{}{
-        "status": status,
+    
+    updates := map[string]interface{}{
+        "status":      status,
         "systemStats": stats,
-        "lastSeen": time.Now().Unix(),
-    }).Error
+        "lastSeen":    time.Now().Unix(),
+    }
+    
+    // Extract address from stats JSON if present
+    if stats != "" {
+        var statsData map[string]interface{}
+        if err := json.Unmarshal([]byte(stats), &statsData); err == nil {
+            if address, ok := statsData["address"].(string); ok && address != "" {
+                updates["address"] = address
+            }
+        }
+    }
+    
+    return db.Model(&model.Slave{}).Where("id = ?", id).Updates(updates).Error
 }
 
 func (s *SlaveService) ProcessTrafficStats(slaveId int, data map[string]interface{}) error {

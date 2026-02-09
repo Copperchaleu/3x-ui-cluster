@@ -1090,6 +1090,12 @@
           this.$message.error('Please select a slave server.');
           return;
         }
+        // Validate address verification - get Vue instance from modal
+        const modalVue = inboundModalVueInstance;
+        if (modalVue && !modalVue.addressVerified) {
+          this.$message.error('Please verify the domain address before saving.');
+          return;
+        }
         const data = {
           up: dbInbound.up,
           down: dbInbound.down,
@@ -1120,6 +1126,12 @@
         // Validate slave selection
         if (!dbInbound.slaveId || dbInbound.slaveId === 0) {
           this.$message.error('Please select a slave server.');
+          return;
+        }
+        // Validate address verification
+        const modalVue = inboundModalVueInstance;
+        if (modalVue && !modalVue.addressVerified) {
+          this.$message.error('Please verify the domain address before saving.');
           return;
         }
         const data = {

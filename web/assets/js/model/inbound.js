@@ -1066,10 +1066,12 @@ class Inbound extends XrayCommonClass {
         tag = '',
         sniffing = new Sniffing(),
         clientStats = '',
+        address = '',
     ) {
         super();
         this.port = port;
         this.listen = listen;
+        this.address = address;
         this._protocol = protocol;
         this.settings = ObjectUtil.isEmpty(settings) ? Inbound.Settings.getSettings(protocol) : settings;
         this.stream = streamSettings;
@@ -1642,7 +1644,8 @@ class Inbound extends XrayCommonClass {
     genAllLinks(remark = '', remarkModel = '-ieo', client) {
         let result = [];
         let email = client ? client.email : '';
-        let addr = !ObjectUtil.isEmpty(this.listen) && this.listen !== "0.0.0.0" ? this.listen : location.hostname;
+        let addr = !ObjectUtil.isEmpty(this.address) ? this.address :
+            (!ObjectUtil.isEmpty(this.listen) && this.listen !== "0.0.0.0" ? this.listen : location.hostname);
         let port = this.port;
         const separationChar = remarkModel.charAt(0);
         const orderChars = remarkModel.slice(1);
@@ -1671,7 +1674,8 @@ class Inbound extends XrayCommonClass {
     }
 
     genInboundLinks(remark = '', remarkModel = '-ieo') {
-        let addr = !ObjectUtil.isEmpty(this.listen) && this.listen !== "0.0.0.0" ? this.listen : location.hostname;
+        let addr = !ObjectUtil.isEmpty(this.address) ? this.address :
+            (!ObjectUtil.isEmpty(this.listen) && this.listen !== "0.0.0.0" ? this.listen : location.hostname);
         if (this.clients) {
             let links = [];
             this.clients.forEach((client) => {
@@ -1702,7 +1706,8 @@ class Inbound extends XrayCommonClass {
             StreamSettings.fromJson(json.streamSettings),
             json.tag,
             Sniffing.fromJson(json.sniffing),
-            json.clientStats
+            json.clientStats,
+            json.address
         )
     }
 
