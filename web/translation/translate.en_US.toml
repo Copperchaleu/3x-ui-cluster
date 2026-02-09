@@ -71,6 +71,7 @@
 "emptyBalancersDesc" = "No added balancers."
 "emptyReverseDesc" = "No added reverse proxies."
 "somethingWentWrong" = "Something went wrong"
+"verify" = "Verify"
 
 [subscription]
 "title" = "Subscription info"
@@ -210,6 +211,7 @@
 "resetTrafficContent" = "Are you sure you want to reset traffic?"
 "copyLink" = "Copy URL"
 "address" = "Address"
+"addressDesc" = "Custom domain or IP for subscription links. Leave empty to use Slave IP."
 "network" = "Network"
 "destinationPort" = "Destination Port"
 "targetAddress" = "Target Address"

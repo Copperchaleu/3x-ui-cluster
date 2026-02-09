@@ -1100,6 +1100,7 @@
           trafficReset: dbInbound.trafficReset,
           lastTrafficResetTime: dbInbound.lastTrafficResetTime,
           slaveId: dbInbound.slaveId || 0,
+          address: dbInbound.address || '',
 
           listen: inbound.listen,
           port: inbound.port,
@@ -1131,6 +1132,7 @@
           trafficReset: dbInbound.trafficReset,
           lastTrafficResetTime: dbInbound.lastTrafficResetTime,
           slaveId: dbInbound.slaveId,
+          address: dbInbound.address || '',
 
           listen: inbound.listen,
           port: inbound.port,
@@ -1633,7 +1635,7 @@
       this.loading();
       this.getDefaultSettings();
       this.getSlaves();
-      
+
       // Initial data fetch
       this.getDBInbounds().then(() => {
         this.loading(false);
@@ -1642,7 +1644,7 @@
       // Setup WebSocket for real-time updates
       if (window.wsClient) {
         window.wsClient.connect();
-        
+
         // Listen for inbounds updates
         window.wsClient.on('inbounds', (payload) => {
           if (payload && Array.isArray(payload)) {
@@ -1656,7 +1658,7 @@
           // Note: Do NOT update total consumed traffic (stats.up, stats.down) from this event
           // because clientTraffics contains delta/incremental values, not total accumulated values.
           // Total traffic is updated via the 'inbounds' event which contains accumulated values from database.
-          
+
           // Update online clients list in real-time
           if (payload && Array.isArray(payload.onlineClients)) {
             const nextOnlineClients = payload.onlineClients;
@@ -1685,7 +1687,7 @@
               }
             }
           }
-          
+
           // Update last online map in real-time
           if (payload && payload.lastOnlineMap && typeof payload.lastOnlineMap === 'object') {
             this.lastOnlineMap = { ...this.lastOnlineMap, ...payload.lastOnlineMap };

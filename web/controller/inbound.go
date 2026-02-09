@@ -3,6 +3,7 @@ package controller
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"strconv"
 
 	"github.com/mhsanaei/3x-ui/v2/database/model"
@@ -54,6 +55,7 @@ func (a *InboundController) initRouter(g *gin.RouterGroup) {
 	g.POST("/lastOnline", a.lastOnline)
 	g.POST("/updateClientTraffic/:email", a.updateClientTraffic)
 	g.POST("/:id/delClientByEmail/:email", a.delInboundClientByEmail)
+	g.POST("/verifyDomain", a.verifyDomain)
 }
 
 // getInbounds retrieves the list of inbounds for the logged-in user.
@@ -504,5 +506,90 @@ func (a *InboundController) delInboundClientByEmail(c *gin.Context) {
 	jsonMsg(c, "Client deleted successfully", nil)
 	if needRestart {
 		a.xrayService.SetToNeedRestart()
+	}
+}
+
+// verifyDomain verifies that a domain resolves to the same IP as the slave server.
+func (a *InboundController) verifyDomain(c *gin.Context) {
+	type VerifyRequest struct {
+		Domain  string `json:"domain"`
+		SlaveId int    `json:"slaveId"`
+	}
+
+	var req VerifyRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		jsonObj(c, gin.H{
+			"success":    false,
+			"msg":        "Invalid request",
+			"resolvedIP": "",
+			"slaveIP":    "",
+		}, nil)
+		return
+	}
+
+	// Get slave address
+	slave, err := a.slaveService.GetSlave(req.SlaveId)
+	if err != nil || slave == nil {
+		jsonObj(c, gin.H{
+			"success":    false,
+			"msg":        "Slave not found",
+			"resolvedIP": "",
+			"slaveIP":    "",
+		}, nil)
+		return
+	}
+
+	slaveIP := slave.Address
+	if slaveIP == "" {
+		jsonObj(c, gin.H{
+			"success":    false,
+			"msg":        "Slave has no IP address",
+			"resolvedIP": "",
+			"slaveIP":    "",
+		}, nil)
+		return
+	}
+
+	// DNS lookup
+	ips, err := net.LookupIP(req.Domain)
+	if err != nil {
+		jsonObj(c, gin.H{
+			"success":    false,
+			"msg":        fmt.Sprintf("DNS lookup failed: %v", err),
+			"resolvedIP": "",
+			"slaveIP":    slaveIP,
+		}, nil)
+		return
+	}
+
+	// Check if any resolved IP matches slave IP
+	var resolvedIPStr string
+	matched := false
+	for _, ip := range ips {
+		ipStr := ip.String()
+		if resolvedIPStr == "" {
+			resolvedIPStr = ipStr
+		}
+		if ipStr == slaveIP {
+			matched = true
+			resolvedIPStr = ipStr
+			break
+		}
+	}
+
+	if matched {
+		jsonObj(c, gin.H{
+			"success":    true,
+			"msg":        "Domain verified successfully",
+			"resolvedIP": resolvedIPStr,
+			"slaveIP":    slaveIP,
+		}, nil)
+	} else {
+		jsonObj(c, gin.H{
+			"success":    false,
+			"msg":        "Domain IP does not match Slave IP",
+			"resolvedIP": resolvedIPStr,
+			"slaveIP":    slaveIP,
+		}, nil)
 	}
 }

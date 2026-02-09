@@ -71,6 +71,7 @@ type Inbound struct {
 	StreamSettings string   `json:"streamSettings" form:"streamSettings"`
 	Tag            string   `json:"tag" form:"tag" gorm:"unique"`
 	Sniffing       string   `json:"sniffing" form:"sniffing"`
+	Address        string   `json:"address" form:"address"` // Custom domain/IP for subscription links (optional)
 }
 
 // OutboundTraffics tracks traffic statistics for Xray outbound connections.

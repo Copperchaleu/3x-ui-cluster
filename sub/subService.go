@@ -28,6 +28,7 @@ type SubService struct {
 	datepicker     string
 	inboundService service.InboundService
 	settingService service.SettingService
+	slaveService   service.SlaveService
 }
 
 // NewSubService creates a new subscription service with the given configuration.
@@ -36,6 +37,26 @@ func NewSubService(showInfo bool, remarkModel string) *SubService {
 		showInfo:    showInfo,
 		remarkModel: remarkModel,
 	}
+}
+
+// resolveInboundAddress determines the address to use for subscription links.
+// Priority: inbound.Address > slave.Address > request host (s.address)
+func (s *SubService) resolveInboundAddress(inbound *model.Inbound) string {
+	// 1. If inbound has a custom address set, use it
+	if inbound.Address != "" {
+		return inbound.Address
+	}
+	
+	// 2. Try to get slave's address
+	if inbound.SlaveId > 0 {
+		slave, err := s.slaveService.GetSlave(inbound.SlaveId)
+		if err == nil && slave != nil && slave.Address != "" {
+			return slave.Address
+		}
+	}
+	
+	// 3. Fallback to request host (Master address)
+	return s.address
 }
 
 // GetSubs retrieves subscription links for a given subscription ID and host.
@@ -181,7 +202,7 @@ func (s *SubService) genVmessLink(inbound *model.Inbound, email string) string {
 	}
 	var address string
 	if inbound.Listen == "" || inbound.Listen == "0.0.0.0" || inbound.Listen == "::" || inbound.Listen == "::0" {
-		address = s.address
+		address = s.resolveInboundAddress(inbound)
 	} else {
 		address = inbound.Listen
 	}
@@ -325,7 +346,7 @@ func (s *SubService) genVmessLink(inbound *model.Inbound, email string) string {
 func (s *SubService) genVlessLink(inbound *model.Inbound, email string) string {
 	var address string
 	if inbound.Listen == "" || inbound.Listen == "0.0.0.0" || inbound.Listen == "::" || inbound.Listen == "::0" {
-		address = s.address
+		address = s.resolveInboundAddress(inbound)
 	} else {
 		address = inbound.Listen
 	}
@@ -534,7 +555,7 @@ func (s *SubService) genVlessLink(inbound *model.Inbound, email string) string {
 func (s *SubService) genTrojanLink(inbound *model.Inbound, email string) string {
 	var address string
 	if inbound.Listen == "" || inbound.Listen == "0.0.0.0" || inbound.Listen == "::" || inbound.Listen == "::0" {
-		address = s.address
+		address = s.resolveInboundAddress(inbound)
 	} else {
 		address = inbound.Listen
 	}
@@ -735,7 +756,7 @@ func (s *SubService) genTrojanLink(inbound *model.Inbound, email string) string 
 func (s *SubService) genShadowsocksLink(inbound *model.Inbound, email string) string {
 	var address string
 	if inbound.Listen == "" || inbound.Listen == "0.0.0.0" || inbound.Listen == "::" || inbound.Listen == "::0" {
-		address = s.address
+		address = s.resolveInboundAddress(inbound)
 	} else {
 		address = inbound.Listen
 	}
