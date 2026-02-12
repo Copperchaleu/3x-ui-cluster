@@ -1,4 +1,4 @@
-name: Release 3X-UI
+name: Release 3X-UI-CLUSTER
 
 on:
   workflow_dispatch:
