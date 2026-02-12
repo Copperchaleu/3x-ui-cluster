@@ -317,6 +317,9 @@ func (s *Server) startTask() {
 	// Run once a month, midnight, first of month
 	s.cron.AddJob("@monthly", job.NewPeriodicTrafficResetJob("monthly"))
 
+	// Check account traffic limits and expiry every 2 minutes
+	s.cron.AddJob("@every 2m", job.NewCheckAccountLimitJob())
+
 	// LDAP sync scheduling
 	if ldapEnabled, _ := s.settingService.GetLdapEnable(); ldapEnabled {
 		runtime, err := s.settingService.GetLdapSyncCron()

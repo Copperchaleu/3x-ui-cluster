@@ -33,6 +33,8 @@ const (
 func initModels() error {
 	models := []any{
 		&model.User{},
+		&model.Account{},        // New: Multi-inbound account
+		&model.AccountClient{},  // New: Account-client association
 		&model.Slave{},
 		&model.Inbound{},
 		&model.OutboundTraffics{},
@@ -49,6 +51,22 @@ func initModels() error {
 			return err
 		}
 	}
+	
+	// Add account_id column to client_traffics if it doesn't exist
+	if !db.Migrator().HasColumn(&xray.ClientTraffic{}, "account_id") {
+		if err := db.Migrator().AddColumn(&xray.ClientTraffic{}, "account_id"); err != nil {
+			log.Printf("Error adding account_id column to client_traffics: %v", err)
+			return err
+		}
+	}
+	
+	// Create index on account_id if it doesn't exist
+	if !db.Migrator().HasIndex(&xray.ClientTraffic{}, "idx_client_traffics_account_id") {
+		if err := db.Exec("CREATE INDEX IF NOT EXISTS idx_client_traffics_account_id ON client_traffics(account_id)").Error; err != nil {
+			log.Printf("Error creating index on account_id: %v", err)
+		}
+	}
+	
 	return nil
 }
 

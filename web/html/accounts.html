@@ -1,0 +1,484 @@
+{{ template "page/head_start" .}}
+{{ template "page/head_end" .}}
+
+{{ template "page/body_start" .}}
+<a-layout id="app" v-cloak :class="themeSwitcher.currentTheme">
+  <a-sidebar></a-sidebar>
+  <a-layout id="content-layout">
+    <a-layout-content>
+      <a-spin :spinning="loading" :delay="500" tip='{{ i18n "loading"}}'>
+        <a-card>
+          <a-row type="flex" justify="space-between" :style="{ marginBottom: '16px' }">
+            <a-col>
+              <h2>{{ i18n "pages.accounts.title" }}</h2>
+            </a-col>
+            <a-col>
+              <a-button type="primary" @click="openAddAccount">
+                <a-icon type="plus"></a-icon>
+                {{ i18n "pages.accounts.addAccount" }}
+              </a-button>
+            </a-col>
+          </a-row>
+
+          <!-- Accounts Table -->
+          <a-table 
+            :columns="columns" 
+            :data-source="accounts" 
+            :row-key="record => record.id"
+            :pagination="pagination"
+            :loading="loading">
+            
+            <!-- Username Column -->
+            <span slot="username" slot-scope="text, record">
+              <a-tag color="blue">[[ record.username ]]</a-tag>
+            </span>
+
+            <!-- Status Column -->
+            <span slot="enable" slot-scope="text, record">
+              <a-switch 
+                v-model="record.enable" 
+                @change="onEnableChange(record)"
+                checked-children='{{ i18n "enable" }}'
+                un-checked-children='{{ i18n "disable" }}'>
+              </a-switch>
+            </span>
+
+            <!-- Traffic Column -->
+            <span slot="traffic" slot-scope="text, record">
+              <div>
+                <a-progress 
+                  :percent="getTrafficPercent(record)" 
+                  :status="isTrafficExceeded(record) ? 'exception' : 'normal'"
+                  :style="{ width: '200px' }">
+                </a-progress>
+                <div style="font-size: 12px; margin-top: 4px;">
+                  [[ SizeFormatter.sizeFormat(record.up + record.down) ]] / 
+                  [[ record.totalGB > 0 ? record.totalGB + ' GB' : '{{ i18n "unlimited" }}' ]]
+                </div>
+              </div>
+            </span>
+
+            <!-- Expiry Column -->
+            <span slot="expiryTime" slot-scope="text, record">
+              <a-tag v-if="record.expiryTime > 0" :color="isExpired(record) ? 'red' : 'green'">
+                [[ formatDate(record.expiryTime) ]]
+              </a-tag>
+              <a-tag v-else color="blue">{{ i18n "pages.accounts.neverExpires" }}</a-tag>
+            </span>
+
+            <!-- Subscription Column -->
+            <span slot="subscription" slot-scope="text, record">
+              <a-button size="small" @click="copySubscription(record)">
+                <a-icon type="link"></a-icon>
+                {{ i18n "pages.accounts.copySubLink" }}
+              </a-button>
+            </span>
+
+            <!-- Actions Column -->
+            <span slot="action" slot-scope="text, record">
+              <a-space>
+                <a-button size="small" @click="viewClients(record)">
+                  <a-icon type="team"></a-icon>
+                  {{ i18n "pages.accounts.manageClients" }}
+                </a-button>
+                <a-button size="small" @click="editAccount(record)">
+                  <a-icon type="edit"></a-icon>
+                </a-button>
+                <a-button size="small" @click="resetTraffic(record)" type="primary">
+                  <a-icon type="reload"></a-icon>
+                </a-button>
+                <a-button size="small" type="danger" @click="deleteAccount(record)">
+                  <a-icon type="delete"></a-icon>
+                </a-button>
+              </a-space>
+            </span>
+          </a-table>
+        </a-card>
+
+        <!-- Add/Edit Account Modal -->
+        <a-modal
+          :title="editingAccount.id ? editAccountTitle : addAccountTitle"
+          :visible="accountModalVisible"
+          @ok="saveAccount"
+          @cancel="accountModalVisible = false"
+          ok-text='{{ i18n "confirm" }}'
+          cancel-text='{{ i18n "cancel" }}'>
+          <a-form-model :model="editingAccount" :label-col="{ span: 6 }" :wrapper-col="{ span: 18 }">
+            <a-form-model-item label='{{ i18n "pages.accounts.username" }}'>
+              <a-input v-model="editingAccount.username"></a-input>
+            </a-form-model-item>
+            <a-form-model-item label='{{ i18n "remark" }}'>
+              <a-input v-model="editingAccount.remark"></a-input>
+            </a-form-model-item>
+            <a-form-model-item label='{{ i18n "enable" }}'>
+              <a-switch v-model="editingAccount.enable"></a-switch>
+            </a-form-model-item>
+            <a-form-model-item label='{{ i18n "pages.accounts.totalTraffic" }}'>
+              <a-input-number v-model="editingAccount.totalGB" :min="0" :step="1" style="width: 100%">
+                <span slot="addonAfter">GB</span>
+              </a-input-number>
+              <div style="font-size: 12px; color: #999;">{{ i18n "pages.accounts.trafficHelp" }}</div>
+            </a-form-model-item>
+            <a-form-model-item label='{{ i18n "expiryTime" }}'>
+              <a-date-picker 
+                v-model="expiryTimeDate"
+                show-time
+                format="YYYY-MM-DD HH:mm:ss"
+                style="width: 100%">
+              </a-date-picker>
+            </a-form-model-item>
+          </a-form-model>
+        </a-modal>
+
+        <!-- Manage Clients Modal -->
+        <a-modal
+          title='{{ i18n "pages.accounts.manageClients" }}'
+          :visible="clientsModalVisible"
+          @cancel="clientsModalVisible = false"
+          :footer="null"
+          width="80%">
+          <div v-if="selectedAccount">
+            <h3>[[ selectedAccount.username ]]</h3>
+            <a-button type="primary" @click="showAddClientModal" :style="{ marginBottom: '16px' }">
+              <a-icon type="plus"></a-icon>
+              {{ i18n "pages.accounts.addClient" }}
+            </a-button>
+            
+            <a-table 
+              :columns="clientColumns" 
+              :data-source="accountClients"
+              :row-key="record => record.id"
+              size="small">
+              
+              <span slot="clientEmail" slot-scope="text">
+                <a-tag>[[ text ]]</a-tag>
+              </span>
+              
+              <span slot="inbound" slot-scope="text, record">
+                <div>[[ record.inboundTag ]]</div>
+                <div style="font-size: 12px; color: #999;">[[ record.inboundRemark ]]</div>
+              </span>
+              
+              <span slot="action" slot-scope="text, record">
+                <a-button size="small" type="danger" @click="removeClient(record)">
+                  <a-icon type="delete"></a-icon>
+                  {{ i18n "remove" }}
+                </a-button>
+              </span>
+            </a-table>
+          </div>
+        </a-modal>
+
+        <!-- Add Client Modal -->
+        <a-modal
+          title='{{ i18n "pages.accounts.addClient" }}'
+          :visible="addClientModalVisible"
+          @ok="addClientToAccount"
+          @cancel="addClientModalVisible = false"
+          ok-text='{{ i18n "confirm" }}'
+          cancel-text='{{ i18n "cancel" }}'>
+          <a-form-model :label-col="{ span: 6 }" :wrapper-col="{ span: 18 }">
+            <a-form-model-item label='{{ i18n "pages.accounts.selectInbound" }}'>
+              <a-select v-model="newClient.inboundId" @change="onInboundChange" style="width: 100%">
+                <a-select-option v-for="inbound in availableInbounds" :key="inbound.id" :value="inbound.id">
+                  [[ inbound.tag ]] - [[ inbound.remark ]]
+                </a-select-option>
+              </a-select>
+            </a-form-model-item>
+            <a-form-model-item label='{{ i18n "pages.accounts.clientEmail" }}'>
+              <a-select 
+                v-model="newClient.clientEmail" 
+                :loading="loadingClients"
+                :disabled="!newClient.inboundId"
+                placeholder='{{ i18n "pages.accounts.selectClientEmail" }}'
+                style="width: 100%">
+                <a-select-option v-for="email in inboundClients" :key="email" :value="email">
+                  [[ email ]]
+                </a-select-option>
+              </a-select>
+              <div style="font-size: 12px; color: #999;">{{ i18n "pages.accounts.selectClientEmailHelp" }}</div>
+            </a-form-model-item>
+          </a-form-model>
+        </a-modal>
+      </a-spin>
+    </a-layout-content>
+  </a-layout>
+</a-layout>
+
+{{template "page/body_scripts" .}}
+{{template "component/aSidebar" .}}
+{{template "component/aThemeSwitch" .}}
+
+<script>
+const app = new Vue({
+  delimiters: ['[[', ']]'],
+  el: '#app',
+  data: {
+    themeSwitcher,
+    loading: false,
+    accounts: [],
+    editAccountTitle: '{{ i18n "pages.accounts.editAccount" }}',
+    addAccountTitle: '{{ i18n "pages.accounts.addAccount" }}',
+    accountModalVisible: false,
+    clientsModalVisible: false,
+    addClientModalVisible: false,
+    editingAccount: {
+      id: null,
+      username: '',
+      remark: '',
+      enable: true,
+      totalGB: 0,
+      expiryTime: 0,
+    },
+    selectedAccount: null,
+    accountClients: [],
+    availableInbounds: [],
+    inboundClients: [],
+    loadingClients: false,
+    newClient: {
+      inboundId: null,
+      clientEmail: ''
+    },
+    expiryTimeDate: null,
+    pagination: {
+        pageSize: 10,
+        showSizeChanger: true,
+        pageSizeOptions: ['10', '20', '50', '100'],
+      },
+      columns: [
+        {
+          title: '{{ i18n "pages.accounts.username" }}',
+          dataIndex: 'username',
+          scopedSlots: { customRender: 'username' },
+        },
+        {
+          title: '{{ i18n "status" }}',
+          dataIndex: 'enable',
+          scopedSlots: { customRender: 'enable' },
+        },
+        {
+          title: '{{ i18n "pages.accounts.traffic" }}',
+          scopedSlots: { customRender: 'traffic' },
+        },
+        {
+          title: '{{ i18n "expiryTime" }}',
+          dataIndex: 'expiryTime',
+          scopedSlots: { customRender: 'expiryTime' },
+        },
+        {
+          title: '{{ i18n "pages.accounts.subscription" }}',
+          scopedSlots: { customRender: 'subscription' },
+        },
+        {
+          title: '{{ i18n "operations" }}',
+          scopedSlots: { customRender: 'action' },
+        },
+      ],
+      clientColumns: [
+        {
+          title: '{{ i18n "pages.accounts.clientEmail" }}',
+          dataIndex: 'clientEmail',
+          scopedSlots: { customRender: 'clientEmail' },
+        },
+        {
+          title: '{{ i18n "pages.accounts.inbound" }}',
+          scopedSlots: { customRender: 'inbound' },
+        },
+        {
+          title: '{{ i18n "operations" }}',
+          scopedSlots: { customRender: 'action' },
+        },
+      ],
+  },
+  mounted() {
+    this.fetchAccounts();
+    this.fetchInbounds();
+  },
+  methods: {
+    async fetchAccounts() {
+      this.loading = true;
+      try {
+        const msg = await HttpUtil.get('/panel/api/account/list');
+        if (msg.success) {
+          this.accounts = msg.obj;
+        }
+      } finally {
+        this.loading = false;
+      }
+    },
+    async fetchInbounds() {
+      const msg = await HttpUtil.get('/panel/api/inbounds/list');
+      if (msg.success) {
+        this.availableInbounds = msg.obj;
+      }
+    },
+    getEmptyAccount() {
+      return {
+        id: null,
+        username: '',
+        remark: '',
+        enable: true,
+        totalGB: 0,
+        expiryTime: 0,
+      };
+    },
+    openAddAccount() {
+      this.editingAccount = this.getEmptyAccount();
+      this.expiryTimeDate = null;
+      this.accountModalVisible = true;
+    },
+    editAccount(account) {
+      this.editingAccount = Object.assign({}, account);
+      this.expiryTimeDate = account.expiryTime > 0 ? moment(account.expiryTime) : null;
+      this.accountModalVisible = true;
+    },
+    async saveAccount() {
+      if (this.expiryTimeDate) {
+        this.editingAccount.expiryTime = this.expiryTimeDate.valueOf();
+      } else {
+        this.editingAccount.expiryTime = 0;
+      }
+      
+      const url = this.editingAccount.id 
+        ? `/panel/api/account/update/${this.editingAccount.id}`
+        : '/panel/api/account/add';
+      
+      const msg = await HttpUtil.post(url, this.editingAccount);
+      if (msg.success) {
+        this.$message.success(msg.msg);
+        this.accountModalVisible = false;
+        this.fetchAccounts();
+      } else {
+        this.$message.error(msg.msg);
+      }
+    },
+    async deleteAccount(account) {
+      this.$confirm({
+        title: '{{ i18n "pages.accounts.confirmDelete" }}',
+        content: `{{ i18n "pages.accounts.deleteWarning" }}: ${account.username}`,
+        okType: 'danger',
+        onOk: async () => {
+          const msg = await HttpUtil.post(`/panel/api/account/del/${account.id}`);
+          if (msg.success) {
+            this.$message.success(msg.msg);
+            this.fetchAccounts();
+          } else {
+            this.$message.error(msg.msg);
+          }
+        },
+      });
+    },
+    async resetTraffic(account) {
+      const msg = await HttpUtil.post(`/panel/api/account/${account.id}/traffic/reset`);
+      if (msg.success) {
+        this.$message.success(msg.msg);
+        this.fetchAccounts();
+      } else {
+        this.$message.error(msg.msg);
+      }
+    },
+    async viewClients(account) {
+      this.selectedAccount = account;
+      this.clientsModalVisible = true;
+      const msg = await HttpUtil.get(`/panel/api/account/${account.id}/clients`);
+      if (msg.success) {
+        this.accountClients = msg.obj || [];
+      }
+    },
+    showAddClientModal() {
+      this.newClient = { inboundId: null, clientEmail: '' };
+      this.inboundClients = [];
+      this.addClientModalVisible = true;
+    },
+    async onInboundChange(inboundId) {
+      if (!inboundId) {
+        this.inboundClients = [];
+        this.newClient.clientEmail = '';
+        return;
+      }
+      await this.fetchInboundClients(inboundId);
+    },
+    async fetchInboundClients(inboundId) {
+      this.loadingClients = true;
+      this.newClient.clientEmail = '';
+      try {
+        const msg = await HttpUtil.get(`/panel/api/inbounds/${inboundId}/clients`);
+        if (msg.success) {
+          this.inboundClients = msg.obj || [];
+        } else {
+          this.inboundClients = [];
+          this.$message.error(msg.msg);
+        }
+      } catch (error) {
+        this.inboundClients = [];
+        this.$message.error('Failed to fetch clients');
+      } finally {
+        this.loadingClients = false;
+      }
+    },
+    async addClientToAccount() {
+      if (!this.newClient.inboundId || !this.newClient.clientEmail) {
+        this.$message.error('{{ i18n "pages.accounts.pleaseFillAll" }}');
+        return;
+      }
+      
+      const msg = await HttpUtil.post(
+        `/panel/api/account/${this.selectedAccount.id}/clients/add`,
+        this.newClient
+      );
+      
+      if (msg.success) {
+        this.$message.success(msg.msg);
+        this.addClientModalVisible = false;
+        this.viewClients(this.selectedAccount);
+      } else {
+        this.$message.error(msg.msg);
+      }
+    },
+    async removeClient(client) {
+      const msg = await HttpUtil.post(
+        `/panel/api/account/${this.selectedAccount.id}/clients/remove/${client.clientEmail}`
+      );
+      if (msg.success) {
+        this.$message.success(msg.msg);
+        this.viewClients(this.selectedAccount);
+      } else {
+        this.$message.error(msg.msg);
+      }
+    },
+    copySubscription(account) {
+      const subUrl = `${window.location.origin}/sub/account/${account.subId}`;
+      navigator.clipboard.writeText(subUrl).then(() => {
+        this.$message.success('{{ i18n "pages.accounts.subLinkCopied" }}');
+      });
+    },
+    getTrafficPercent(account) {
+      if (account.totalGB <= 0) return 0;
+      const total = account.totalGB * 1024 * 1024 * 1024;
+      const used = account.up + account.down;
+      return Math.min(Math.round((used / total) * 100), 100);
+    },
+    isTrafficExceeded(account) {
+      return account.totalGB > 0 && (account.up + account.down) >= (account.totalGB * 1024 * 1024 * 1024);
+    },
+    isExpired(account) {
+      return account.expiryTime > 0 && Date.now() > account.expiryTime;
+    },
+    formatDate(timestamp) {
+      return moment(timestamp).format('YYYY-MM-DD HH:mm');
+    },
+    async onEnableChange(account) {
+      const msg = await HttpUtil.post(`/panel/api/account/update/${account.id}`, account);
+      if (msg.success) {
+        this.$message.success(msg.msg);
+      } else {
+        this.$message.error(msg.msg);
+        // Revert the switch if update failed
+        account.enable = !account.enable;
+      }
+    },
+  },
+});
+</script>
+
+{{ template "page/body_end" .}}

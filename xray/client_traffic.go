@@ -5,6 +5,7 @@ package xray
 type ClientTraffic struct {
 	Id         int    `json:"id" form:"id" gorm:"primaryKey;autoIncrement"`
 	InboundId  int    `json:"inboundId" form:"inboundId"`
+	AccountId  int    `json:"accountId" form:"accountId" gorm:"default:0;index"` // Associated account ID (0 = no account)
 	Enable     bool   `json:"enable" form:"enable"`
 	Email      string `json:"email" form:"email" gorm:"unique"`
 	UUID       string `json:"uuid" form:"uuid" gorm:"-"`

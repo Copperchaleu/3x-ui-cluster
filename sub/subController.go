@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/mhsanaei/3x-ui/v2/config"
+	"github.com/mhsanaei/3x-ui/v2/web/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -76,9 +77,18 @@ func NewSUBController(
 func (a *SUBController) initRouter(g *gin.RouterGroup) {
 	gLink := g.Group(a.subPath)
 	gLink.GET(":subid", a.subs)
+	
+	// Account-based subscription routes
+	gAccount := g.Group("/account")
+	gAccount.GET(":subid", a.accountSubs)
+	
 	if a.jsonEnabled {
 		gJson := g.Group(a.subJsonPath)
 		gJson.GET(":subid", a.subJsons)
+		
+		// Account-based JSON subscription
+		gAccountJson := g.Group("/account/json")
+		gAccountJson.GET(":subid", a.accountSubJsons)
 	}
 }
 
@@ -188,4 +198,92 @@ func (a *SUBController) ApplyCommonHeaders(
 	c.Writer.Header().Set("Announce", "base64:"+base64.StdEncoding.EncodeToString([]byte(profileAnnounce)))
 	c.Writer.Header().Set("Routing-Enable", strconv.FormatBool(profileEnableRouting))
 	c.Writer.Header().Set("Routing", profileRoutingRules)
+}
+
+// accountSubs handles HTTP requests for account-based subscription links.
+// This endpoint aggregates all clients from different inbounds that belong to an account.
+// @route GET /sub/account/:subid
+func (a *SUBController) accountSubs(c *gin.Context) {
+	subId := c.Param("subid")
+	_, host, _, _ := a.subService.ResolveRequest(c)
+	
+	// Get account by subId
+	accountService := service.AccountService{}
+	account, err := accountService.GetAccountBySubId(subId)
+	if err != nil {
+		c.String(400, "Account not found")
+		return
+	}
+	
+	// Get subscription links for the account
+	subs, lastOnline, traffic, err := a.subService.GetSubsByAccountId(account.Id, host)
+	if err != nil || len(subs) == 0 {
+		c.String(400, "Error: "+err.Error())
+		return
+	}
+
+	result := ""
+	for _, sub := range subs {
+		result += sub + "\n"
+	}
+
+	// If the request expects HTML, render the info page
+	accept := c.GetHeader("Accept")
+	if strings.Contains(strings.ToLower(accept), "text/html") || c.Query("html") == "1" || strings.EqualFold(c.Query("view"), "html") {
+		// Render HTML info page similar to regular subscription
+		a.renderSubInfoPage(c, account.Username, subs, lastOnline, traffic, result)
+		return
+	}
+
+	// Add headers with account traffic information
+	header := fmt.Sprintf("upload=%d; download=%d; total=%d; expire=%d", traffic.Up, traffic.Down, traffic.Total, traffic.ExpiryTime/1000)
+	a.ApplyCommonHeaders(c, header, a.updateInterval, a.subTitle, a.subSupportUrl, a.subProfileUrl, a.subAnnounce, a.subEnableRouting, a.subRoutingRules)
+
+	if a.subEncrypt {
+		c.String(200, base64.StdEncoding.EncodeToString([]byte(result)))
+	} else {
+		c.String(200, result)
+	}
+}
+
+// accountSubJsons handles HTTP requests for account-based JSON subscription configurations.
+// @route GET /sub/account/json/:subid
+func (a *SUBController) accountSubJsons(c *gin.Context) {
+	subId := c.Param("subid")
+	_, host, _, _ := a.subService.ResolveRequest(c)
+	
+	// Get account by subId
+	accountService := service.AccountService{}
+	account, err := accountService.GetAccountBySubId(subId)
+	if err != nil {
+		c.String(400, "Account not found")
+		return
+	}
+	
+	// For JSON subscription, we need to aggregate from all account clients
+	// This is a simplified version - you may want to implement full JSON generation
+	subs, _, traffic, err := a.subService.GetSubsByAccountId(account.Id, host)
+	if err != nil || len(subs) == 0 {
+		c.String(400, "Error: "+err.Error())
+		return
+	}
+
+	// Generate JSON configuration (simplified)
+	// In a full implementation, you'd want to properly merge all inbound configs
+	header := fmt.Sprintf("upload=%d; download=%d; total=%d; expire=%d", traffic.Up, traffic.Down, traffic.Total, traffic.ExpiryTime/1000)
+	a.ApplyCommonHeaders(c, header, a.updateInterval, a.subTitle, a.subSupportUrl, a.subProfileUrl, a.subAnnounce, a.subEnableRouting, a.subRoutingRules)
+
+	// For now, return a placeholder
+	c.String(501, "JSON subscription for accounts not yet fully implemented")
+}
+
+// renderSubInfoPage renders an HTML info page for subscription details (helper method).
+func (a *SUBController) renderSubInfoPage(c *gin.Context, clientName string, subs []string, lastOnline int64, traffic interface{}, rawResult string) {
+	// This is a placeholder - implement actual HTML rendering based on your needs
+	c.HTML(200, "sub_info.html", gin.H{
+		"clientName": clientName,
+		"subs":       subs,
+		"lastOnline": lastOnline,
+		"traffic":    traffic,
+	})
 }

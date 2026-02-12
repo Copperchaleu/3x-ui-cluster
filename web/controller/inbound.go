@@ -35,6 +35,7 @@ func (a *InboundController) initRouter(g *gin.RouterGroup) {
 
 	g.GET("/list", a.getInbounds)
 	g.GET("/get/:id", a.getInbound)
+	g.GET("/:id/clients", a.getInboundClientEmails)
 	g.GET("/getClientTraffics/:email", a.getClientTraffics)
 	g.GET("/getClientTrafficsById/:id", a.getClientTrafficsById)
 
@@ -93,6 +94,23 @@ func (a *InboundController) getInbound(c *gin.Context) {
 		return
 	}
 	jsonObj(c, inbound, nil)
+}
+
+// getInboundClientEmails retrieves all client emails for a given inbound
+func (a *InboundController) getInboundClientEmails(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		jsonMsg(c, I18nWeb(c, "get"), err)
+		return
+	}
+	
+	emails, err := a.inboundService.GetInboundClients(id)
+	if err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.obtain"), err)
+		return
+	}
+	
+	jsonObj(c, emails, nil)
 }
 
 // getClientTraffics retrieves client traffic information by email.
