@@ -71,6 +71,7 @@
 "emptyBalancersDesc" = "未添加負載平衡器。"
 "emptyReverseDesc" = "未添加反向代理。"
 "somethingWentWrong" = "發生錯誤"
+"expiryTime" = "到期時間"
 
 [subscription]
 "title" = "訂閱資訊"
@@ -801,7 +802,7 @@
 "subscription" = "Subscription"
 "copySubLink" = "Copy Subscription Link"
 "subLinkCopied" = "Subscription link copied to clipboard"
-"neverExpires" = "Never Expires"
+"neverExpires" = "永不過期"
 "confirmDelete" = "Confirm Delete"
 "deleteWarning" = "Are you sure you want to delete this account"
 "pleaseFillAll" = "Please fill in all required fields"

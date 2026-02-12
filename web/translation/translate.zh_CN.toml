@@ -72,6 +72,7 @@
 "emptyReverseDesc" = "未添加反向代理。"
 "somethingWentWrong" = "出了点问题"
 "verify" = "验证"
+"expiryTime" = "到期时间"
 
 [subscription]
 "title" = "订阅信息"

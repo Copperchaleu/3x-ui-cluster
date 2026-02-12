@@ -127,10 +127,6 @@
                           <a-icon type="reload"></a-icon>
                           {{ i18n "pages.inbounds.resetAllTraffic" }}
                         </a-menu-item>
-                        <a-menu-item key="resetClients">
-                          <a-icon type="file-done"></a-icon>
-                          {{ i18n "pages.inbounds.resetAllClientTraffics" }}
-                        </a-menu-item>
                         <a-menu-item key="delDepletedClients" :style="{ color: '#FF4D4F' }">
                           <a-icon type="rest"></a-icon>
                           {{ i18n "pages.inbounds.delDepletedClients" }}
@@ -211,10 +207,6 @@
                             <a-menu-item key="addBulkClient">
                               <a-icon type="usergroup-add"></a-icon>
                               {{ i18n "pages.client.bulk"}}
-                            </a-menu-item>
-                            <a-menu-item key="resetClients">
-                              <a-icon type="file-done"></a-icon>
-                              {{ i18n "pages.inbounds.resetInboundClientTraffics"}}
                             </a-menu-item>
                             <a-menu-item key="export">
                               <a-icon type="export"></a-icon>
@@ -962,9 +954,6 @@
           case "resetInbounds":
             this.resetAllTraffic();
             break;
-          case "resetClients":
-            this.resetAllClientTraffics(-1);
-            break;
           case "delDepletedClients":
             this.delDepletedClients(-1)
             break;
@@ -998,9 +987,6 @@
             break;
           case "resetTraffic":
             this.resetTraffic(dbInbound.id);
-            break;
-          case "resetClients":
-            this.resetAllClientTraffics(dbInbound.id);
             break;
           case "clone":
             this.openCloneInbound(dbInbound);
@@ -1379,20 +1365,6 @@
         const inbound = dbInbound.toInbound();
         return inbound && inbound.clients ? inbound.clients : null;
       },
-      resetClientTraffic(client, dbInboundId, confirmation = true) {
-        if (confirmation) {
-          this.$confirm({
-            title: '{{ i18n "pages.inbounds.resetTraffic"}}' + ' ' + client.email,
-            content: '{{ i18n "pages.inbounds.resetTrafficContent"}}',
-            class: themeSwitcher.currentTheme,
-            okText: '{{ i18n "reset"}}',
-            cancelText: '{{ i18n "cancel"}}',
-            onOk: () => this.submit('/panel/api/inbounds/' + dbInboundId + '/resetClientTraffic/' + client.email),
-          })
-        } else {
-          this.submit('/panel/api/inbounds/' + dbInboundId + '/resetClientTraffic/' + client.email);
-        }
-      },
       resetAllTraffic() {
         this.$confirm({
           title: '{{ i18n "pages.inbounds.resetAllTrafficTitle"}}',
@@ -1402,16 +1374,6 @@
           cancelText: '{{ i18n "cancel"}}',
           onOk: () => this.submit('/panel/api/inbounds/resetAllTraffics'),
         });
-      },
-      resetAllClientTraffics(dbInboundId) {
-        this.$confirm({
-          title: dbInboundId > 0 ? '{{ i18n "pages.inbounds.resetInboundClientTrafficTitle"}}' : '{{ i18n "pages.inbounds.resetAllClientTrafficTitle"}}',
-          content: dbInboundId > 0 ? '{{ i18n "pages.inbounds.resetInboundClientTrafficContent"}}' : '{{ i18n "pages.inbounds.resetAllClientTrafficContent"}}',
-          class: themeSwitcher.currentTheme,
-          okText: '{{ i18n "reset"}}',
-          cancelText: '{{ i18n "cancel"}}',
-          onOk: () => this.submit('/panel/api/inbounds/resetAllClientTraffics/' + dbInboundId),
-        })
       },
       delDepletedClients(dbInboundId) {
         this.$confirm({

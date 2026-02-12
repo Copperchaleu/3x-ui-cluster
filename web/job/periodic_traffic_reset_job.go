@@ -37,19 +37,13 @@ func (j *PeriodicTrafficResetJob) Run() {
 	resetCount := 0
 
 	for _, inbound := range inbounds {
-		resetInboundErr := j.inboundService.ResetAllTraffics()
-		if resetInboundErr != nil {
-			logger.Warning("Failed to reset traffic for inbound", inbound.Id, ":", resetInboundErr)
+		// Reset inbound traffic
+		err := j.inboundService.ResetInboundTraffic(inbound.Id)
+		if err != nil {
+			logger.Warning("Failed to reset traffic for inbound", inbound.Id, ":", err)
+			continue
 		}
-
-		resetClientErr := j.inboundService.ResetAllClientTraffics(inbound.Id)
-		if resetClientErr != nil {
-			logger.Warning("Failed to reset traffic for all users of inbound", inbound.Id, ":", resetClientErr)
-		}
-
-		if resetInboundErr == nil && resetClientErr == nil {
-			resetCount++
-		}
+		resetCount++
 	}
 
 	if resetCount > 0 {

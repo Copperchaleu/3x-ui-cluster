@@ -71,6 +71,7 @@
 "emptyBalancersDesc" = "Nenhum balanceador adicionado."
 "emptyReverseDesc" = "Nenhum proxy reverso adicionado."
 "somethingWentWrong" = "Algo deu errado"
+"expiryTime" = "Data de Expiração"
 
 [subscription]
 "title" = "Informações da assinatura"
@@ -802,7 +803,7 @@
 "subscription" = "Subscription"
 "copySubLink" = "Copy Subscription Link"
 "subLinkCopied" = "Subscription link copied to clipboard"
-"neverExpires" = "Never Expires"
+"neverExpires" = "Nunca Expira"
 "confirmDelete" = "Confirm Delete"
 "deleteWarning" = "Are you sure you want to delete this account"
 "pleaseFillAll" = "Please fill in all required fields"

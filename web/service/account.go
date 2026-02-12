@@ -27,6 +27,18 @@ func (s *AccountService) GetAccounts() ([]*model.Account, error) {
 	if err != nil && err != gorm.ErrRecordNotFound {
 		return nil, err
 	}
+
+	// Populate real-time aggregated traffic for each account
+	for _, account := range accounts {
+		up, down, err := s.GetAccountTraffic(account.Id)
+		if err != nil {
+			logger.Warningf("Failed to get traffic for account %s: %v", account.Username, err)
+			continue
+		}
+		account.Up = up
+		account.Down = down
+	}
+
 	return accounts, nil
 }
 
@@ -38,6 +50,16 @@ func (s *AccountService) GetAccount(id int) (*model.Account, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Populate real-time aggregated traffic
+	up, down, err := s.GetAccountTraffic(id)
+	if err != nil {
+		logger.Warningf("Failed to get traffic for account %s: %v", account.Username, err)
+	} else {
+		account.Up = up
+		account.Down = down
+	}
+
 	return account, nil
 }
 
@@ -375,36 +397,91 @@ func (s *AccountService) SyncAccountTraffic(accountId int) error {
 	}).Error
 }
 
+// GetAccountTrafficUsage aggregates the total traffic usage from all clients belonging to an account.
+// This provides real-time traffic statistics by summing up and down traffic from client_traffics table.
+func (s *AccountService) GetAccountTrafficUsage(accountId int) (up int64, down int64, err error) {
+	db := database.GetDB()
+
+	// Get all client emails for this account
+	var associations []model.AccountClient
+	err = db.Where("account_id = ?", accountId).Find(&associations).Error
+	if err != nil {
+		return 0, 0, err
+	}
+
+	if len(associations) == 0 {
+		return 0, 0, nil
+	}
+
+	// Collect all client emails
+	emails := make([]string, len(associations))
+	for i, assoc := range associations {
+		emails[i] = assoc.ClientEmail
+	}
+
+	// Aggregate traffic from all clients
+	var result struct {
+		TotalUp   int64
+		TotalDown int64
+	}
+
+	err = db.Model(&xray.ClientTraffic{}).
+		Where("email IN ?", emails).
+		Select("COALESCE(SUM(up), 0) as total_up, COALESCE(SUM(down), 0) as total_down").
+		Scan(&result).Error
+
+	if err != nil {
+		return 0, 0, err
+	}
+
+	return result.TotalUp, result.TotalDown, nil
+}
+
 // DisableClientsExceedingAccountLimit disables all clients for accounts that have exceeded their limits.
 // This should be called periodically as a background job.
+// It aggregates real-time traffic from all clients and compares against account limits.
 func (s *AccountService) DisableClientsExceedingAccountLimit() error {
 	db := database.GetDB()
 
-	// Find accounts that have exceeded limits
-	var exceededAccounts []model.Account
-	err := db.Raw(`
-		SELECT a.* FROM accounts a
-		WHERE a.total_gb > 0 
-		AND (a.up + a.down) >= (a.total_gb * 1024 * 1024 * 1024)
-		AND a.enable = true
-	`).Scan(&exceededAccounts).Error
-
+	// Find all active accounts with traffic limits
+	var accounts []model.Account
+	err := db.Where("total_gb > 0 AND enable = true").Find(&accounts).Error
 	if err != nil {
 		return err
 	}
 
-	for _, account := range exceededAccounts {
-		// Get all client emails for this account
-		var associations []model.AccountClient
-		db.Where("account_id = ?", account.Id).Find(&associations)
+	for _, account := range accounts {
+		// Get real-time aggregated traffic usage
+		up, down, err := s.GetAccountTrafficUsage(account.Id)
+		if err != nil {
+			logger.Warningf("Failed to get traffic usage for account %s: %v", account.Username, err)
+			continue
+		}
 
-		for _, assoc := range associations {
-			// Disable client in traffic table
-			db.Model(&xray.ClientTraffic{}).
-				Where("email = ?", assoc.ClientEmail).
-				Update("enable", false)
+		totalUsed := up + down
+		totalLimit := account.TotalGB * 1024 * 1024 * 1024 // Convert GB to bytes
 
-			logger.Infof("Disabled client %s due to account %s traffic limit exceeded", assoc.ClientEmail, account.Username)
+		// Check if limit exceeded
+		if totalUsed >= totalLimit {
+			// Disable the account itself
+			err = db.Model(&model.Account{}).Where("id = ?", account.Id).Update("enable", false).Error
+			if err != nil {
+				logger.Warningf("Failed to disable account %s: %v", account.Username, err)
+				continue
+			}
+
+			// Disable all associated clients
+			var associations []model.AccountClient
+			db.Where("account_id = ?", account.Id).Find(&associations)
+
+			for _, assoc := range associations {
+				db.Model(&xray.ClientTraffic{}).
+					Where("email = ?", assoc.ClientEmail).
+					Update("enable", false)
+			}
+
+			logger.Infof("Disabled account %s and its clients - traffic limit exceeded (used: %d bytes, limit: %d bytes)",
+				account.Username, totalUsed, totalLimit)
 		}
 	}
 
@@ -426,18 +503,25 @@ func (s *AccountService) DisableExpiredAccountClients() error {
 	}
 
 	for _, account := range expiredAccounts {
+		// Disable the account itself
+		err = db.Model(&model.Account{}).Where("id = ?", account.Id).Update("enable", false).Error
+		if err != nil {
+			logger.Warningf("Failed to disable expired account %s: %v", account.Username, err)
+			continue
+		}
+
 		// Get all client emails for this account
 		var associations []model.AccountClient
 		db.Where("account_id = ?", account.Id).Find(&associations)
 
+		// Disable all associated clients
 		for _, assoc := range associations {
-			// Disable client in traffic table
 			db.Model(&xray.ClientTraffic{}).
 				Where("email = ?", assoc.ClientEmail).
 				Update("enable", false)
-
-			logger.Infof("Disabled client %s due to account %s expiry", assoc.ClientEmail, account.Username)
 		}
+
+		logger.Infof("Disabled account %s and its clients - account expired", account.Username)
 	}
 
 	return nil

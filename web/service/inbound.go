@@ -1882,103 +1882,17 @@ func (s *InboundService) ResetClientTrafficByEmail(clientEmail string) error {
 	return nil
 }
 
-func (s *InboundService) ResetClientTraffic(id int, clientEmail string) (bool, error) {
-	needRestart := false
-
-	traffic, err := s.GetClientTrafficByEmail(clientEmail)
-	if err != nil {
-		return false, err
-	}
-
-	if !traffic.Enable {
-		inbound, err := s.GetInbound(id)
-		if err != nil {
-			return false, err
-		}
-		clients, err := s.GetClients(inbound)
-		if err != nil {
-			return false, err
-		}
-		for _, client := range clients {
-			if client.Email == clientEmail && client.Enable && p != nil {
-				s.xrayApi.Init(p.GetAPIPort())
-				cipher := ""
-				if string(inbound.Protocol) == "shadowsocks" {
-					var oldSettings map[string]any
-					err = json.Unmarshal([]byte(inbound.Settings), &oldSettings)
-					if err != nil {
-						return false, err
-					}
-					cipher = oldSettings["method"].(string)
-				}
-				err1 := s.xrayApi.AddUser(string(inbound.Protocol), inbound.Tag, map[string]any{
-					"email":    client.Email,
-					"id":       client.ID,
-					"security": client.Security,
-					"flow":     client.Flow,
-					"password": client.Password,
-					"cipher":   cipher,
-				})
-				if err1 == nil {
-					logger.Debug("Client enabled due to reset traffic:", clientEmail)
-				} else {
-					logger.Debug("Error in enabling client by api:", err1)
-					needRestart = true
-				}
-				s.xrayApi.Close()
-				break
-			}
-		}
-	}
-
-	traffic.Up = 0
-	traffic.Down = 0
-	traffic.Enable = true
-
+func (s *InboundService) ResetInboundTraffic(id int) error {
 	db := database.GetDB()
-	err = db.Save(traffic).Error
-	if err != nil {
-		return false, err
-	}
 
-	return needRestart, nil
-}
+	result := db.Model(&model.Inbound{}).
+		Where("id = ?", id).
+		Updates(map[string]interface{}{
+			"up":   0,
+			"down": 0,
+		})
 
-func (s *InboundService) ResetAllClientTraffics(id int) error {
-	db := database.GetDB()
-	now := time.Now().Unix() * 1000
-
-	return db.Transaction(func(tx *gorm.DB) error {
-		whereText := "inbound_id "
-		if id == -1 {
-			whereText += " > ?"
-		} else {
-			whereText += " = ?"
-		}
-
-		// Reset client traffics
-		result := tx.Model(xray.ClientTraffic{}).
-			Where(whereText, id).
-			Updates(map[string]any{"enable": true, "up": 0, "down": 0})
-
-		if result.Error != nil {
-			return result.Error
-		}
-
-		// Update lastTrafficResetTime for the inbound(s)
-		inboundWhereText := "id "
-		if id == -1 {
-			inboundWhereText += " > ?"
-		} else {
-			inboundWhereText += " = ?"
-		}
-
-		result = tx.Model(model.Inbound{}).
-			Where(inboundWhereText, id).
-			Update("last_traffic_reset_time", now)
-
-		return result.Error
-	})
+	return result.Error
 }
 
 func (s *InboundService) ResetAllTraffics() error {

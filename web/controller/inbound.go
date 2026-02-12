@@ -47,9 +47,7 @@ func (a *InboundController) initRouter(g *gin.RouterGroup) {
 	g.POST("/addClient", a.addInboundClient)
 	g.POST("/:id/delClient/:clientId", a.delInboundClient)
 	g.POST("/updateClient/:clientId", a.updateInboundClient)
-	g.POST("/:id/resetClientTraffic/:email", a.resetClientTraffic)
 	g.POST("/resetAllTraffics", a.resetAllTraffics)
-	g.POST("/resetAllClientTraffics/:id", a.resetAllClientTraffics)
 	g.POST("/delDepletedClients/:id", a.delDepletedClients)
 	g.POST("/import", a.importInbound)
 	g.POST("/onlines", a.onlines)
@@ -367,33 +365,6 @@ func (a *InboundController) updateInboundClient(c *gin.Context) {
 	}
 }
 
-// resetClientTraffic resets the traffic counter for a specific client in an inbound.
-func (a *InboundController) resetClientTraffic(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.inboundUpdateSuccess"), err)
-		return
-	}
-	email := c.Param("email")
-
-	// Get inbound info
-	inbound, _ := a.inboundService.GetInbound(id)
-
-	needRestart, err := a.inboundService.ResetClientTraffic(id, email)
-	if err != nil {
-		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
-		return
-	}
-	jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.resetInboundClientTrafficSuccess"), nil)
-	if needRestart {
-		a.xrayService.SetToNeedRestart()
-	}
-	// Push config to slave
-	if inbound != nil && inbound.SlaveId > 0 {
-		a.slaveService.PushConfig(inbound.SlaveId)
-	}
-}
-
 // resetAllTraffics resets all traffic counters across all inbounds.
 func (a *InboundController) resetAllTraffics(c *gin.Context) {
 	err := a.inboundService.ResetAllTraffics()
@@ -404,24 +375,6 @@ func (a *InboundController) resetAllTraffics(c *gin.Context) {
 		a.xrayService.SetToNeedRestart()
 	}
 	jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.resetAllTrafficSuccess"), nil)
-}
-
-// resetAllClientTraffics resets traffic counters for all clients in a specific inbound.
-func (a *InboundController) resetAllClientTraffics(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.inboundUpdateSuccess"), err)
-		return
-	}
-
-	err = a.inboundService.ResetAllClientTraffics(id)
-	if err != nil {
-		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
-		return
-	} else {
-		a.xrayService.SetToNeedRestart()
-	}
-	jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.resetAllClientTrafficSuccess"), nil)
 }
 
 // importInbound imports an inbound configuration from provided data.

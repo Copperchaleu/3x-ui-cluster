@@ -3,9 +3,6 @@
          :confirm-loading="clientModal.confirmLoading" :closable="true" :mask-closable="false"
          :class="themeSwitcher.currentTheme"
          :ok-text="clientModal.okText" cancel-text='{{ i18n "close" }}'>
-    <template v-if="isEdit">
-        <a-tag v-if="isExpiry || isTrafficExhausted" color="red" :style="{ marginBottom: '10px', display: 'block', textAlign: 'center' }">Account is (Expired|Traffic Ended) And Disabled</a-tag>
-    </template>
     {{template "form/client"}}
 </a-modal>
 <script>
@@ -97,15 +94,6 @@
             get datepicker() {
                 return app.datepicker;
             },
-            get isTrafficExhausted() {
-                if (!clientStats) return false
-                if (clientStats.total <= 0) return false
-                if (clientStats.up + clientStats.down < clientStats.total) return false
-                return true
-            },
-            get isExpiry() {
-                return this.clientModal.isEdit && this.client.expiryTime >0 ? (this.client.expiryTime < new Date().getTime()) : false;
-            },
             get delayedStart() {
                 return this.clientModal.delayedStart;
             },
@@ -146,25 +134,7 @@
                     document.getElementById("clientIPs").value = "";
                 } catch (error) {
                 }
-            },
-            resetClientTraffic(email, dbInboundId, iconElement) {
-                this.$confirm({
-                    title: '{{ i18n "pages.inbounds.resetTraffic"}}',
-                    content: '{{ i18n "pages.inbounds.resetTrafficContent"}}',
-                    class: themeSwitcher.currentTheme,
-                    okText: '{{ i18n "reset"}}',
-                    cancelText: '{{ i18n "cancel"}}',
-                    onOk: async () => {
-                        iconElement.disabled = true;
-                        const msg = await HttpUtil.postWithModal('/panel/api/inbounds/' + dbInboundId + '/resetClientTraffic/' + email);
-                        if (msg.success) {
-                            this.clientModal.clientStats.up = 0;
-                            this.clientModal.clientStats.down = 0;
-                        }
-                        iconElement.disabled = false;
-                    },
-                })
-            },
+            }
         },
     });
 

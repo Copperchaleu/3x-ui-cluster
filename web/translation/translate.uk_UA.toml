@@ -71,6 +71,7 @@
 "emptyBalancersDesc" = "Немає доданих балансувальників."
 "emptyReverseDesc" = "Немає доданих зворотних проксі."
 "somethingWentWrong" = "Щось пішло не так"
+"expiryTime" = "Час закінчення"
 
 [subscription]
 "title" = "Інформація про підписку"
@@ -802,7 +803,7 @@
 "subscription" = "Subscription"
 "copySubLink" = "Copy Subscription Link"
 "subLinkCopied" = "Subscription link copied to clipboard"
-"neverExpires" = "Never Expires"
+"neverExpires" = "Не закінчується"
 "confirmDelete" = "Confirm Delete"
 "deleteWarning" = "Are you sure you want to delete this account"
 "pleaseFillAll" = "Please fill in all required fields"

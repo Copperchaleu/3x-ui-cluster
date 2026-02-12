@@ -71,6 +71,7 @@
 "emptyBalancersDesc" = "Eklenmiş dengeleyici yok."
 "emptyReverseDesc" = "Eklenmiş ters proxy yok."
 "somethingWentWrong" = "Bir şeyler yanlış gitti"
+"expiryTime" = "Süre Sonu"
 
 [subscription]
 "title" = "Abonelik Bilgisi"
@@ -802,7 +803,7 @@
 "subscription" = "Subscription"
 "copySubLink" = "Copy Subscription Link"
 "subLinkCopied" = "Subscription link copied to clipboard"
-"neverExpires" = "Never Expires"
+"neverExpires" = "Asla Sona Ermez"
 "confirmDelete" = "Confirm Delete"
 "deleteWarning" = "Are you sure you want to delete this account"
 "pleaseFillAll" = "Please fill in all required fields"
