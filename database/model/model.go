@@ -30,6 +30,42 @@ type User struct {
 	Password string `json:"password"`
 }
 
+// Account represents a multi-inbound user account with aggregated traffic management.
+// An account can have multiple clients across different inbounds and slaves.
+type Account struct {
+	Id         int    `json:"id" form:"id" gorm:"primaryKey;autoIncrement"`
+	Username   string `json:"username" form:"username" gorm:"unique;not null"`   // Unique account identifier
+	Remark     string `json:"remark" form:"remark"`                              // Account description
+	Enable     bool   `json:"enable" form:"enable" gorm:"default:true"`          // Whether the account is enabled
+	TotalGB    int64  `json:"totalGB" form:"totalGB" gorm:"default:0"`           // Total traffic limit in GB (0 = unlimited)
+	ExpiryTime int64  `json:"expiryTime" form:"expiryTime" gorm:"default:0"`     // Expiration timestamp (0 = never expires)
+	Up         int64  `json:"up" form:"up" gorm:"default:0"`                     // Total uploaded traffic in bytes
+	Down       int64  `json:"down" form:"down" gorm:"default:0"`                 // Total downloaded traffic in bytes
+	SubId      string `json:"subId" form:"subId" gorm:"unique"`                  // Subscription UUID
+	TgId       int64  `json:"tgId" form:"tgId" gorm:"default:0"`                 // Telegram user ID for notifications
+	Reset      int    `json:"reset" form:"reset" gorm:"default:0"`               // Traffic reset period in days (0 = never)
+	CreatedAt  int64  `json:"createdAt" form:"createdAt"`                        // Creation timestamp
+	UpdatedAt  int64  `json:"updatedAt" form:"updatedAt"`                        // Last update timestamp
+}
+
+func (Account) TableName() string {
+	return "accounts"
+}
+
+// AccountClient represents the association between an account and a client in an inbound.
+// This is a many-to-many relationship table that links accounts to their clients.
+type AccountClient struct {
+	Id          int    `json:"id" form:"id" gorm:"primaryKey;autoIncrement"`
+	AccountId   int    `json:"accountId" form:"accountId" gorm:"not null;index:idx_account_client"`
+	InboundId   int    `json:"inboundId" form:"inboundId" gorm:"not null;index:idx_account_inbound"`
+	ClientEmail string `json:"clientEmail" form:"clientEmail" gorm:"not null;uniqueIndex"` // Each client can only belong to one account
+	CreatedAt   int64  `json:"createdAt" form:"createdAt"`                                 // Creation timestamp
+}
+
+func (AccountClient) TableName() string {
+	return "account_clients"
+}
+
 // Slave represents a slave server connected to the master.
 type Slave struct {
 	Id          int    `json:"id" form:"id" gorm:"primaryKey;autoIncrement"`

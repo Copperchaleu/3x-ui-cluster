@@ -391,6 +391,45 @@ func (s *InboundService) GetInbound(id int) (*model.Inbound, error) {
 	return inbound, nil
 }
 
+// GetInboundClients returns a list of client emails for a given inbound
+func (s *InboundService) GetInboundClients(inboundId int) ([]string, error) {
+	inbound, err := s.GetInbound(inboundId)
+	if err != nil {
+		return nil, err
+	}
+
+	var settings map[string]interface{}
+	err = json.Unmarshal([]byte(inbound.Settings), &settings)
+	if err != nil {
+		return nil, err
+	}
+
+	clientsInterface, ok := settings["clients"]
+	if !ok {
+		return []string{}, nil
+	}
+
+	clients, ok := clientsInterface.([]interface{})
+	if !ok {
+		return []string{}, nil
+	}
+
+	emails := make([]string, 0, len(clients))
+	for _, clientInterface := range clients {
+		client, ok := clientInterface.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		
+		email, ok := client["email"].(string)
+		if ok && email != "" {
+			emails = append(emails, email)
+		}
+	}
+
+	return emails, nil
+}
+
 // UpdateInbound modifies an existing inbound configuration.
 // It validates changes, updates the database, and syncs with the running Xray instance.
 // Returns the updated inbound, whether Xray needs restart, and any error.
@@ -1090,6 +1129,38 @@ func (s *InboundService) addClientTraffic(tx *gorm.DB, traffics []*xray.ClientTr
 	err = tx.Save(dbClientTraffics).Error
 	if err != nil {
 		logger.Warning("AddClientTraffic update data ", err)
+	}
+
+	// Sync account traffic: aggregate traffic from all clients belonging to each account
+	accountTrafficMap := make(map[int]struct {
+		Up   int64
+		Down int64
+	})
+
+	for _, dbTraffic := range dbClientTraffics {
+		if dbTraffic.AccountId > 0 {
+			at := accountTrafficMap[dbTraffic.AccountId]
+			at.Up += dbTraffic.Up
+			at.Down += dbTraffic.Down
+			accountTrafficMap[dbTraffic.AccountId] = at
+		}
+	}
+
+	// Update account traffic by aggregating from all its clients
+	for accountId := range accountTrafficMap {
+		var totalUp, totalDown int64
+		err = tx.Model(&xray.ClientTraffic{}).
+			Select("COALESCE(SUM(up), 0) as up, COALESCE(SUM(down), 0) as down").
+			Where("account_id = ?", accountId).
+			Row().Scan(&totalUp, &totalDown)
+		if err == nil {
+			tx.Model(&model.Account{}).Where("id = ?", accountId).
+				Updates(map[string]interface{}{
+					"up":        totalUp,
+					"down":      totalDown,
+					"updatedAt": time.Now().UnixMilli(),
+				})
+		}
 	}
 
 	return nil

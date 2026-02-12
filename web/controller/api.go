@@ -12,14 +12,15 @@ import (
 // APIController handles the main API routes for the 3x-ui panel, including inbounds and server management.
 type APIController struct {
 	BaseController
-	inboundController  *InboundController
-	outboundController *OutboundController
-	routingController  *RoutingController
-	serverController   *ServerController
-	slaveController    *SlaveController
+	inboundController   *InboundController
+	outboundController  *OutboundController
+	routingController   *RoutingController
+	serverController    *ServerController
+	slaveController     *SlaveController
 	slaveCertController *SlaveCertController
-	Tgbot              service.Tgbot
-	slaveService       service.SlaveService
+	accountController   *AccountController
+	Tgbot               service.Tgbot
+	slaveService        service.SlaveService
 }
 
 // NewAPIController creates a new APIController instance and initializes its routes.
@@ -68,6 +69,10 @@ func (a *APIController) initRouter(g *gin.RouterGroup) {
 	// Slave Certificate API
 	slaveCerts := api.Group("/slave-certs")
 	a.slaveCertController = NewSlaveCertController(slaveCerts)
+
+	// Account API (multi-inbound user management)
+	accounts := api.Group("/account")
+	a.accountController = NewAccountController(accounts)
 
 	// Server API
 	server := api.Group("/server")

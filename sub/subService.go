@@ -150,6 +150,127 @@ func (s *SubService) getInboundsBySubId(subId string) ([]*model.Inbound, error) 
 	return inbounds, nil
 }
 
+// GetSubsByAccountId retrieves subscription links for all clients associated with an account.
+func (s *SubService) GetSubsByAccountId(accountId int, host string) ([]string, int64, xray.ClientTraffic, error) {
+	s.address = host
+	var result []string
+	var aggregatedTraffic xray.ClientTraffic
+	var lastOnline int64
+
+	db := database.GetDB()
+
+	// Get account information
+	account := &model.Account{}
+	err := db.Where("id = ?", accountId).First(account).Error
+	if err != nil {
+		return nil, 0, aggregatedTraffic, common.NewError("Account not found")
+	}
+
+	// Check if account is enabled
+	if !account.Enable {
+		return nil, 0, aggregatedTraffic, common.NewError("Account is disabled")
+	}
+
+	// Check if account has expired
+	if account.ExpiryTime > 0 && time.Now().UnixMilli() > account.ExpiryTime {
+		return nil, 0, aggregatedTraffic, common.NewError("Account has expired")
+	}
+
+	// Get account-client associations
+	var associations []model.AccountClient
+	err = db.Where("account_id = ?", accountId).Find(&associations).Error
+	if err != nil {
+		return nil, 0, aggregatedTraffic, err
+	}
+
+	if len(associations) == 0 {
+		return nil, 0, aggregatedTraffic, common.NewError("No clients found for account")
+	}
+
+	// Get datepicker setting
+	s.datepicker, err = s.settingService.GetDatepicker()
+	if err != nil {
+		s.datepicker = "gregorian"
+	}
+
+	// Aggregate traffic from account
+	aggregatedTraffic.Up = account.Up
+	aggregatedTraffic.Down = account.Down
+	aggregatedTraffic.Total = account.TotalGB * 1024 * 1024 * 1024 // GB to bytes
+	aggregatedTraffic.ExpiryTime = account.ExpiryTime
+	aggregatedTraffic.Enable = account.Enable
+
+	// Iterate through associations and generate links
+	for _, assoc := range associations {
+		inbound, err := s.inboundService.GetInbound(assoc.InboundId)
+		if err != nil || !inbound.Enable {
+			continue
+		}
+
+		clients, err := s.inboundService.GetClients(inbound)
+		if err != nil {
+			logger.Error("SubService - GetClients: Unable to get clients from inbound")
+			continue
+		}
+
+		if clients == nil {
+			continue
+		}
+
+		// Handle fallback master
+		if len(inbound.Listen) > 0 && inbound.Listen[0] == '@' {
+			listen, port, streamSettings, err := s.getFallbackMaster(inbound.Listen, inbound.StreamSettings)
+			if err == nil {
+				inbound.Listen = listen
+				inbound.Port = port
+				inbound.StreamSettings = streamSettings
+			}
+		}
+
+		// Find the specific client
+		for _, client := range clients {
+			if client.Email == assoc.ClientEmail && client.Enable {
+				link := s.getLink(inbound, client.Email)
+				if link != "" {
+					result = append(result, link)
+				}
+
+				// Update last online from client stats
+				ct := s.getClientTraffics(inbound.ClientStats, client.Email)
+				if ct.LastOnline > lastOnline {
+					lastOnline = ct.LastOnline
+				}
+				break
+			}
+		}
+	}
+
+	return result, lastOnline, aggregatedTraffic, nil
+}
+
+// getInboundsByAccountId retrieves all inbounds associated with an account.
+func (s *SubService) getInboundsByAccountId(accountId int) ([]*model.Inbound, error) {
+	db := database.GetDB()
+	var inbounds []*model.Inbound
+
+	err := db.Raw(`
+		SELECT DISTINCT i.* FROM inbounds i
+		INNER JOIN account_clients ac ON ac.inbound_id = i.id
+		WHERE ac.account_id = ? AND i.enable = true
+	`, accountId).Scan(&inbounds).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Preload client stats
+	for _, inbound := range inbounds {
+		db.Model(inbound).Preload("ClientStats").Find(inbound)
+	}
+
+	return inbounds, nil
+}
+
 func (s *SubService) getClientTraffics(traffics []xray.ClientTraffic, email string) xray.ClientTraffic {
 	for _, traffic := range traffics {
 		if traffic.Email == email {
