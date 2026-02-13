@@ -240,9 +240,11 @@ func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, boo
 
 	existEmail, err := s.checkEmailExistForInbound(inbound)
 	if err != nil {
+		logger.Errorf("Failed to check email existence for inbound %s: %v", inbound.Tag, err)
 		return inbound, false, err
 	}
 	if existEmail != "" {
+		logger.Warningf("Duplicate email when adding inbound %s: %s", inbound.Tag, existEmail)
 		return inbound, false, common.NewError("Duplicate email:", existEmail)
 	}
 
@@ -365,15 +367,18 @@ func (s *InboundService) DelInbound(id int) (bool, error) {
 	}
 	inbound, err := s.GetInbound(id)
 	if err != nil {
+		logger.Errorf("Failed to get inbound id=%d for deletion: %v", id, err)
 		return false, err
 	}
 	clients, err := s.GetClients(inbound)
 	if err != nil {
+		logger.Errorf("Failed to get clients for inbound id=%d: %v", id, err)
 		return false, err
 	}
 	for _, client := range clients {
 		err := s.DelClientIPs(db, client.Email)
 		if err != nil {
+			logger.Warningf("Failed to delete client IPs for email %s: %v", client.Email, err)
 			return false, err
 		}
 	}
@@ -434,16 +439,21 @@ func (s *InboundService) GetInboundClients(inboundId int) ([]string, error) {
 // It validates changes, updates the database, and syncs with the running Xray instance.
 // Returns the updated inbound, whether Xray needs restart, and any error.
 func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, bool, error) {
+	logger.Infof("Updating inbound: id=%d, tag=%s, protocol=%s, port=%d", 
+		inbound.Id, inbound.Tag, inbound.Protocol, inbound.Port)
 	exist, err := s.checkPortExist(inbound.Listen, inbound.Port, inbound.Id)
 	if err != nil {
+		logger.Errorf("Failed to check port existence for inbound id=%d: %v", inbound.Id, err)
 		return inbound, false, err
 	}
 	if exist {
+		logger.Warningf("Port conflict when updating inbound id=%d: port %d already exists", inbound.Id, inbound.Port)
 		return inbound, false, common.NewError("Port already exists:", inbound.Port)
 	}
 
 	oldInbound, err := s.GetInbound(inbound.Id)
 	if err != nil {
+		logger.Errorf("Failed to get original inbound id=%d: %v", inbound.Id, err)
 		return inbound, false, err
 	}
 
@@ -617,8 +627,10 @@ func (s *InboundService) updateClientTraffics(tx *gorm.DB, oldInbound *model.Inb
 }
 
 func (s *InboundService) AddInboundClient(data *model.Inbound) (bool, error) {
+	logger.Infof("Adding clients to inbound: id=%d, tag=%s", data.Id, data.Tag)
 	clients, err := s.GetClients(data)
 	if err != nil {
+		logger.Errorf("Failed to get clients for inbound id=%d: %v", data.Id, err)
 		return false, err
 	}
 
@@ -642,9 +654,11 @@ func (s *InboundService) AddInboundClient(data *model.Inbound) (bool, error) {
 	}
 	existEmail, err := s.checkEmailsExistForClients(clients)
 	if err != nil {
+		logger.Errorf("Failed to check email existence: %v", err)
 		return false, err
 	}
 	if existEmail != "" {
+		logger.Warningf("Duplicate email when adding clients: %s", existEmail)
 		return false, common.NewError("Duplicate email:", existEmail)
 	}
 

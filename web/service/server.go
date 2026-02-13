@@ -234,14 +234,14 @@ func (s *ServerService) GetStatus(lastStatus *Status) *Status {
 	// CPU stats
 	util, err := s.sampleCPUUtilization()
 	if err != nil {
-		logger.Warning("get cpu percent failed:", err)
+		logger.Warningf("Failed to get CPU usage: %v", err)
 	} else {
 		status.Cpu = util
 	}
 
 	status.CpuCores, err = cpu.Counts(false)
 	if err != nil {
-		logger.Warning("get cpu cores count failed:", err)
+		logger.Warningf("Failed to get CPU core count: %v", err)
 	}
 
 	status.LogicalPro = runtime.NumCPU()
@@ -646,7 +646,7 @@ func (s *ServerService) downloadXRay(version string) (string, error) {
 func (s *ServerService) UpdateXray(version string) error {
 	// 1. Stop xray before doing anything
 	if err := s.StopXrayService(); err != nil {
-		logger.Warning("failed to stop xray before update:", err)
+logger.Errorf("Failed to stop Xray before update: %v", err)
 	}
 
 	// 2. Download the zip

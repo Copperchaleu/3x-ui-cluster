@@ -185,6 +185,42 @@ func Errorf(format string, args ...any) {
 	addToBuffer("ERROR", fmt.Sprintf(format, args...))
 }
 
+// Fatal logs a critical error message, adds it to buffer, and exits the program with status 1.
+// This should only be used for unrecoverable errors during startup or initialization.
+func Fatal(args ...any) {
+	logger.Critical(args...)
+	addToBuffer("CRITICAL", fmt.Sprint(args...))
+	CloseLogger()
+	os.Exit(1)
+}
+
+// Fatalf logs a formatted critical error message, adds it to buffer, and exits with status 1.
+// This should only be used for unrecoverable errors during startup or initialization.
+func Fatalf(format string, args ...any) {
+	logger.Criticalf(format, args...)
+	addToBuffer("CRITICAL", fmt.Sprintf(format, args...))
+	CloseLogger()
+	os.Exit(1)
+}
+
+// Panic logs a critical error message, adds it to buffer, and triggers a panic.
+// Use this when the program state is corrupted and cannot continue safely.
+func Panic(args ...any) {
+	msg := fmt.Sprint(args...)
+	logger.Critical(msg)
+	addToBuffer("CRITICAL", msg)
+	panic(msg)
+}
+
+// Panicf logs a formatted critical error message, adds it to buffer, and triggers a panic.
+// Use this when the program state is corrupted and cannot continue safely.
+func Panicf(format string, args ...any) {
+	msg := fmt.Sprintf(format, args...)
+	logger.Criticalf(format, args...)
+	addToBuffer("CRITICAL", msg)
+	panic(msg)
+}
+
 // addToBuffer adds a log entry to the in-memory ring buffer for web UI retrieval.
 func addToBuffer(level string, newLog string) {
 	t := time.Now()

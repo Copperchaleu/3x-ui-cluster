@@ -216,14 +216,18 @@ func (p *process) refreshVersion() {
 
 // Start launches the Xray process with the current configuration.
 func (p *process) Start() (err error) {
+	logger.Info("Starting Xray process...")
 	if p.IsRunning() {
+		logger.Warning("Xray process is already running")
 		return errors.New("xray is already running")
 	}
 
 	defer func() {
 		if err != nil {
-			logger.Error("Failure in running xray-core process: ", err)
+			logger.Errorf("Failed to start Xray process: %v", err)
 			p.exitErr = err
+		} else if p.cmd != nil && p.cmd.Process != nil {
+			logger.Infof("Xray process started successfully (PID: %d, API Port: %d)", p.cmd.Process.Pid, p.apiPort)
 		}
 	}()
 
@@ -234,10 +238,11 @@ func (p *process) Start() (err error) {
 
 	err = os.MkdirAll(config.GetLogFolder(), 0o770)
 	if err != nil {
-		logger.Warningf("Failed to create log folder: %s", err)
+		logger.Warningf("Failed to create log folder: %v", err)
 	}
 
 	configPath := GetConfigPath()
+	logger.Debugf("Writing Xray configuration to: %s", configPath)
 	err = os.WriteFile(configPath, data, fs.ModePerm)
 	if err != nil {
 		return common.NewErrorf("Failed to write configuration file: %v", err)
@@ -274,15 +279,25 @@ func (p *process) Start() (err error) {
 
 // Stop terminates the running Xray process.
 func (p *process) Stop() error {
+	logger.Info("Stopping Xray process...")
 	if !p.IsRunning() {
+		logger.Warning("Xray process is not running")
 		return errors.New("xray is not running")
 	}
 
+	var err error
 	if runtime.GOOS == "windows" {
-		return p.cmd.Process.Kill()
+		err = p.cmd.Process.Kill()
 	} else {
-		return p.cmd.Process.Signal(syscall.SIGTERM)
+		err = p.cmd.Process.Signal(syscall.SIGTERM)
 	}
+	
+	if err != nil {
+		logger.Errorf("Failed to stop Xray process: %v", err)
+	} else {
+		logger.Info("Xray process stopped successfully")
+	}
+	return err
 }
 
 // writeCrashReport writes a crash report to the binary folder with a timestamped filename.

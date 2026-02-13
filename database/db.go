@@ -8,13 +8,13 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"log"
 	"os"
 	"path"
 	"slices"
 
 	"github.com/mhsanaei/3x-ui/v2/config"
 	"github.com/mhsanaei/3x-ui/v2/database/model"
+	xuiLogger "github.com/mhsanaei/3x-ui/v2/logger"
 	"github.com/mhsanaei/3x-ui/v2/util/crypto"
 	"github.com/mhsanaei/3x-ui/v2/xray"
 
@@ -47,7 +47,7 @@ func initModels() error {
 	}
 	for _, model := range models {
 		if err := db.AutoMigrate(model); err != nil {
-			log.Printf("Error auto migrating model: %v", err)
+			xuiLogger.Errorf("Error auto migrating model: %v", err)
 			return err
 		}
 	}
@@ -55,15 +55,18 @@ func initModels() error {
 	// Add account_id column to client_traffics if it doesn't exist
 	if !db.Migrator().HasColumn(&xray.ClientTraffic{}, "account_id") {
 		if err := db.Migrator().AddColumn(&xray.ClientTraffic{}, "account_id"); err != nil {
-			log.Printf("Error adding account_id column to client_traffics: %v", err)
+			xuiLogger.Errorf("Error adding account_id column to client_traffics: %v", err)
 			return err
 		}
+		xuiLogger.Info("Added account_id column to client_traffics table")
 	}
 	
 	// Create index on account_id if it doesn't exist
 	if !db.Migrator().HasIndex(&xray.ClientTraffic{}, "idx_client_traffics_account_id") {
 		if err := db.Exec("CREATE INDEX IF NOT EXISTS idx_client_traffics_account_id ON client_traffics(account_id)").Error; err != nil {
-			log.Printf("Error creating index on account_id: %v", err)
+			xuiLogger.Errorf("Error creating index on account_id: %v", err)
+		} else {
+			xuiLogger.Info("Created index on account_id for client_traffics table")
 		}
 	}
 	
@@ -74,14 +77,15 @@ func initModels() error {
 func initUser() error {
 	empty, err := isTableEmpty("users")
 	if err != nil {
-		log.Printf("Error checking if users table is empty: %v", err)
+		xuiLogger.Errorf("Error checking if users table is empty: %v", err)
 		return err
 	}
 	if empty {
+		xuiLogger.Info("Creating default admin user...")
 		hashedPassword, err := crypto.HashPasswordAsBcrypt(defaultPassword)
 
 		if err != nil {
-			log.Printf("Error hashing default password: %v", err)
+			xuiLogger.Errorf("Error hashing default password: %v", err)
 			return err
 		}
 
@@ -89,7 +93,12 @@ func initUser() error {
 			Username: defaultUsername,
 			Password: hashedPassword,
 		}
-		return db.Create(user).Error
+		err = db.Create(user).Error
+		if err != nil {
+			xuiLogger.Errorf("Error creating default admin user: %v", err)
+			return err
+		}
+		xuiLogger.Info("Default admin user created successfully")
 	}
 	return nil
 }
@@ -98,7 +107,7 @@ func initUser() error {
 func runSeeders(isUsersEmpty bool) error {
 	empty, err := isTableEmpty("history_of_seeders")
 	if err != nil {
-		log.Printf("Error checking if users table is empty: %v", err)
+		xuiLogger.Errorf("Error checking if seeders history table is empty: %v", err)
 		return err
 	}
 
@@ -112,13 +121,14 @@ func runSeeders(isUsersEmpty bool) error {
 		db.Model(&model.HistoryOfSeeders{}).Pluck("seeder_name", &seedersHistory)
 
 		if !slices.Contains(seedersHistory, "UserPasswordHash") && !isUsersEmpty {
+			xuiLogger.Info("Running password hash migration seeder...")
 			var users []model.User
 			db.Find(&users)
 
 			for _, user := range users {
 				hashedPassword, err := crypto.HashPasswordAsBcrypt(user.Password)
 				if err != nil {
-					log.Printf("Error hashing password for user '%s': %v", user.Username, err)
+					xuiLogger.Errorf("Error hashing password for user '%s': %v", user.Username, err)
 					return err
 				}
 				db.Model(&user).Update("password", hashedPassword)
@@ -127,7 +137,11 @@ func runSeeders(isUsersEmpty bool) error {
 			hashSeeder := &model.HistoryOfSeeders{
 				SeederName: "UserPasswordHash",
 			}
-			return db.Create(hashSeeder).Error
+			err := db.Create(hashSeeder).Error
+			if err == nil {
+				xuiLogger.Info("Password hash migration completed successfully")
+			}
+			return err
 		}
 	}
 
@@ -143,9 +157,11 @@ func isTableEmpty(tableName string) (bool, error) {
 
 // InitDB sets up the database connection, migrates models, and runs seeders.
 func InitDB(dbPath string) error {
+	xuiLogger.Debugf("Initializing database at path: %s", dbPath)
 	dir := path.Dir(dbPath)
 	err := os.MkdirAll(dir, fs.ModePerm)
 	if err != nil {
+		xuiLogger.Errorf("Failed to create database directory: %v", err)
 		return err
 	}
 
@@ -162,46 +178,52 @@ func InitDB(dbPath string) error {
 	}
 	db, err = gorm.Open(sqlite.Open(dbPath), c)
 	if err != nil {
+		xuiLogger.Errorf("Failed to open database connection: %v", err)
 		return err
 	}
+	xuiLogger.Info("Database connection established")
 
     // Migration: Rename nodes table to slaves if exists
     if db.Migrator().HasTable("nodes") && !db.Migrator().HasTable("slaves") {
-        log.Println("Migrating nodes table to slaves...")
+        xuiLogger.Info("Migrating nodes table to slaves...")
         if err := db.Migrator().RenameTable("nodes", "slaves"); err != nil {
-            log.Printf("Failed to rename nodes table: %v", err)
+            xuiLogger.Errorf("Failed to rename nodes table: %v", err)
+        } else {
+            xuiLogger.Info("Successfully renamed nodes table to slaves")
         }
     }
     
     // Migration: Rename node_id column in inbounds to slave_id
     if db.Migrator().HasTable("inbounds") && db.Migrator().HasColumn(&model.Inbound{}, "node_id") {
-        log.Println("Migrating inbounds.node_id to slave_id...")
+        xuiLogger.Info("Migrating inbounds.node_id to slave_id...")
         if err := db.Migrator().RenameColumn(&model.Inbound{}, "node_id", "slave_id"); err != nil {
-             log.Printf("Failed to rename node_id column: %v", err)
+             xuiLogger.Errorf("Failed to rename node_id column: %v", err)
+        } else {
+            xuiLogger.Info("Successfully renamed node_id column to slave_id")
         }
     }
 
     // Migration: Check for inbounds with SlaveId=0 (Master node) and warn user
-    log.Println("Checking for inbounds assigned to Master (SlaveId=0)...")
+    xuiLogger.Debug("Checking for inbounds assigned to Master (SlaveId=0)...")
     var masterInbounds int64
     db.Model(&model.Inbound{}).Where("slave_id = 0").Count(&masterInbounds)
     
     if masterInbounds > 0 {
-        log.Println("⚠️  WARNING: Found inbounds assigned to Master node (SlaveId=0)")
-        log.Printf("   - Inbounds: %d", masterInbounds)
-        log.Println("   Master node no longer runs Xray proxy.")
-        log.Println("   Please add a Slave server and reassign these configurations via the web panel.")
+        xuiLogger.Warningf("Found %d inbounds assigned to Master node (SlaveId=0)", masterInbounds)
+        xuiLogger.Warning("Master node no longer runs Xray proxy - Please reassign these inbounds to Slave servers")
     }
     
     // Migration: Initialize slave_settings with xrayTemplateConfig for all slaves
-    log.Println("Migrating xrayTemplateConfig to per-slave settings...")
+    xuiLogger.Debug("Migrating xrayTemplateConfig to per-slave settings...")
     if err := migrateXrayTemplateConfig(); err != nil {
-        log.Printf("Warning: Failed to migrate xrayTemplateConfig: %v", err)
+        xuiLogger.Warningf("Failed to migrate xrayTemplateConfig: %v", err)
     }
 
 	if err := initModels(); err != nil {
+		xuiLogger.Errorf("Failed to initialize database models: %v", err)
 		return err
 	}
+	xuiLogger.Info("Database models initialized successfully")
 
 	isUsersEmpty, err := isTableEmpty("users")
 	if err != nil {
@@ -209,19 +231,33 @@ func InitDB(dbPath string) error {
 	}
 
 	if err := initUser(); err != nil {
+		xuiLogger.Errorf("Failed to initialize default user: %v", err)
 		return err
 	}
-	return runSeeders(isUsersEmpty)
+	err = runSeeders(isUsersEmpty)
+	if err != nil {
+		xuiLogger.Errorf("Failed to run database seeders: %v", err)
+	}
+	xuiLogger.Info("Database initialization completed successfully")
+	return err
 }
 
 // CloseDB closes the database connection if it exists.
 func CloseDB() error {
 	if db != nil {
+		xuiLogger.Info("Closing database connection...")
 		sqlDB, err := db.DB()
 		if err != nil {
+			xuiLogger.Errorf("Failed to get database instance for closing: %v", err)
 			return err
 		}
-		return sqlDB.Close()
+		err = sqlDB.Close()
+		if err != nil {
+			xuiLogger.Errorf("Failed to close database connection: %v", err)
+		} else {
+			xuiLogger.Info("Database connection closed successfully")
+		}
+		return err
 	}
 	return nil
 }
@@ -262,24 +298,31 @@ func Checkpoint() error {
 // It does not mutate global state or run migrations.
 func ValidateSQLiteDB(dbPath string) error {
 	if _, err := os.Stat(dbPath); err != nil { // file must exist
+		xuiLogger.Errorf("Database file not found: %s", dbPath)
 		return err
 	}
+	xuiLogger.Debugf("Validating database integrity: %s", dbPath)
 	gdb, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{Logger: logger.Discard})
 	if err != nil {
+		xuiLogger.Errorf("Failed to open database for validation: %v", err)
 		return err
 	}
 	sqlDB, err := gdb.DB()
 	if err != nil {
+		xuiLogger.Errorf("Failed to get database instance: %v", err)
 		return err
 	}
 	defer sqlDB.Close()
 	var res string
 	if err := gdb.Raw("PRAGMA integrity_check;").Scan(&res).Error; err != nil {
+		xuiLogger.Errorf("Database integrity check failed: %v", err)
 		return err
 	}
 	if res != "ok" {
+		xuiLogger.Errorf("Database integrity check result: %s", res)
 		return errors.New("sqlite integrity check failed: " + res)
 	}
+	xuiLogger.Info("Database integrity check passed")
 	return nil
 }
 
@@ -289,7 +332,7 @@ func migrateXrayTemplateConfig() error {
 	var count int64
 	db.Model(&model.SlaveSetting{}).Where("setting_key = ?", "xrayTemplateConfig").Count(&count)
 	if count > 0 {
-		log.Println("xrayTemplateConfig already migrated to slave_settings")
+		xuiLogger.Debug("xrayTemplateConfig already migrated to slave_settings")
 		return nil
 	}
 
@@ -301,7 +344,7 @@ func migrateXrayTemplateConfig() error {
 	}
 
 	if globalConfig == "" {
-		log.Println("No global xrayTemplateConfig found, skipping migration")
+		xuiLogger.Debug("No global xrayTemplateConfig found, skipping migration")
 		return nil
 	}
 
@@ -312,10 +355,11 @@ func migrateXrayTemplateConfig() error {
 	}
 
 	if len(slaves) == 0 {
-		log.Println("No slaves found, skipping xrayTemplateConfig migration")
+		xuiLogger.Debug("No slaves found, skipping xrayTemplateConfig migration")
 		return nil
 	}
 
+	xuiLogger.Infof("Migrating xrayTemplateConfig to %d slaves...", len(slaves))
 	// Create slave_settings record for each slave
 	for _, slave := range slaves {
 		slaveSetting := model.SlaveSetting{
@@ -324,11 +368,11 @@ func migrateXrayTemplateConfig() error {
 			SettingValue: globalConfig,
 		}
 		if err := db.Create(&slaveSetting).Error; err != nil {
-			log.Printf("Warning: Failed to create slave_setting for slave %d: %v", slave.Id, err)
+			xuiLogger.Warningf("Failed to create slave_setting for slave %d: %v", slave.Id, err)
 		} else {
-			log.Printf("✓ Migrated xrayTemplateConfig to slave %d (%s)", slave.Id, slave.Name)
+			xuiLogger.Infof("Migrated xrayTemplateConfig to slave %d (%s)", slave.Id, slave.Name)
 		}
 	}
-	log.Println("xrayTemplateConfig migration completed")
+	xuiLogger.Info("xrayTemplateConfig migration completed")
 	return nil
 }

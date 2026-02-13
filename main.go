@@ -42,33 +42,38 @@ func runWebServer() {
 	case config.Error:
 		logger.InitLogger(logging.ERROR)
 	default:
-		log.Fatalf("Unknown log level: %v", config.GetLogLevel())
+		logger.Fatalf("Unknown log level: %v", config.GetLogLevel())
 	}
 
+	logger.Infof("Starting %v %v", config.GetName(), config.GetVersion())
+	logger.Info("Loading environment variables...")
 	godotenv.Load()
 
+	logger.Info("Initializing database...")
 	err := database.InitDB(config.GetDBPath())
 	if err != nil {
-		log.Fatalf("Error initializing database: %v", err)
+		logger.Fatalf("Error initializing database: %v", err)
 	}
 
+	logger.Info("Initializing web server...")
 	var server *web.Server
 	server = web.NewServer()
 	global.SetWebServer(server)
 	err = server.Start()
 	if err != nil {
-		log.Fatalf("Error starting web server: %v", err)
-		return
+		logger.Fatalf("Error starting web server: %v", err)
 	}
+	logger.Info("Web server started successfully")
 
+	logger.Info("Initializing subscription server...")
 	var subServer *sub.Server
 	subServer = sub.NewServer()
 	global.SetSubServer(subServer)
 	err = subServer.Start()
 	if err != nil {
-		log.Fatalf("Error starting sub server: %v", err)
-		return
+		logger.Fatalf("Error starting sub server: %v", err)
 	}
+	logger.Info("Subscription server started successfully")
 
 	sigCh := make(chan os.Signal, 1)
 	// Trap shutdown signals
@@ -97,28 +102,28 @@ func runWebServer() {
 			global.SetWebServer(server)
 			err = server.Start()
 			if err != nil {
-				log.Fatalf("Error restarting web server: %v", err)
-				return
+				logger.Fatalf("Error restarting web server: %v", err)
 			}
-			log.Println("Web server restarted successfully.")
+			logger.Info("Web server restarted successfully")
 
 			subServer = sub.NewServer()
 			global.SetSubServer(subServer)
 			err = subServer.Start()
 			if err != nil {
-				log.Fatalf("Error restarting sub server: %v", err)
-				return
+				logger.Fatalf("Error restarting sub server: %v", err)
 			}
-			log.Println("Sub server restarted successfully.")
+			logger.Info("Subscription server restarted successfully")
 
 		default:
 			// --- FIX FOR TELEGRAM BOT CONFLICT (409) on full shutdown ---
+			logger.Info("Shutting down servers...")
 			service.StopBot()
 			// ------------------------------------------------------------
 
 			server.Stop()
 			subServer.Stop()
-			log.Println("Shutting down servers.")
+			logger.Info("Servers shut down successfully")
+			logger.CloseLogger()
 			return
 		}
 	}
@@ -126,17 +131,22 @@ func runWebServer() {
 
 // resetSetting resets all panel settings to their default values.
 func resetSetting() {
+	logger.Info("Initializing database for settings reset...")
 	err := database.InitDB(config.GetDBPath())
 	if err != nil {
+		logger.Errorf("Failed to initialize database: %v", err)
 		fmt.Println("Failed to initialize database:", err)
 		return
 	}
 
+	logger.Info("Resetting all panel settings...")
 	settingService := service.SettingService{}
 	err = settingService.ResetSettings()
 	if err != nil {
+		logger.Errorf("Failed to reset settings: %v", err)
 		fmt.Println("Failed to reset settings:", err)
 	} else {
+		logger.Info("Settings successfully reset")
 		fmt.Println("Settings successfully reset.")
 	}
 }
@@ -213,8 +223,10 @@ func updateTgbotEnableSts(status bool) {
 
 // updateTgbotSetting updates Telegram bot settings including token, chat ID, and runtime schedule.
 func updateTgbotSetting(tgBotToken string, tgBotChatid string, tgBotRuntime string) {
+	logger.Info("Initializing database for Telegram bot settings update...")
 	err := database.InitDB(config.GetDBPath())
 	if err != nil {
+		logger.Errorf("Error initializing database: %v", err)
 		fmt.Println("Error initializing database:", err)
 		return
 	}
@@ -251,8 +263,10 @@ func updateTgbotSetting(tgBotToken string, tgBotChatid string, tgBotRuntime stri
 
 // updateSetting updates various panel settings including port, credentials, base path, listen IP, and two-factor authentication.
 func updateSetting(port int, username string, password string, webBasePath string, listenIP string, resetTwoFactor bool) {
+	logger.Info("Initializing database for settings update...")
 	err := database.InitDB(config.GetDBPath())
 	if err != nil {
+		logger.Errorf("Database initialization failed: %v", err)
 		fmt.Println("Database initialization failed:", err)
 		return
 	}
@@ -261,48 +275,63 @@ func updateSetting(port int, username string, password string, webBasePath strin
 	userService := service.UserService{}
 
 	if port > 0 {
+		logger.Infof("Setting panel port to %d...", port)
 		err := settingService.SetPort(port)
 		if err != nil {
+			logger.Errorf("Failed to set port: %v", err)
 			fmt.Println("Failed to set port:", err)
 		} else {
+			logger.Infof("Port set successfully: %d", port)
 			fmt.Printf("Port set successfully: %v\n", port)
 		}
 	}
 
 	if username != "" || password != "" {
+		logger.Info("Updating panel credentials...")
 		err := userService.UpdateFirstUser(username, password)
 		if err != nil {
+			logger.Errorf("Failed to update username and password: %v", err)
 			fmt.Println("Failed to update username and password:", err)
 		} else {
+			logger.Info("Username and password updated successfully")
 			fmt.Println("Username and password updated successfully")
 		}
 	}
 
 	if webBasePath != "" {
+		logger.Infof("Setting base URI path to %s...", webBasePath)
 		err := settingService.SetBasePath(webBasePath)
 		if err != nil {
+			logger.Errorf("Failed to set base URI path: %v", err)
 			fmt.Println("Failed to set base URI path:", err)
 		} else {
+			logger.Infof("Base URI path set successfully: %s", webBasePath)
 			fmt.Println("Base URI path set successfully")
 		}
 	}
 
 	if resetTwoFactor {
+		logger.Info("Resetting two-factor authentication...")
 		err := settingService.SetTwoFactorEnable(false)
 
 		if err != nil {
+			logger.Errorf("Failed to reset two-factor authentication: %v", err)
 			fmt.Println("Failed to reset two-factor authentication:", err)
 		} else {
 			settingService.SetTwoFactorToken("")
+			logger.Info("Two-factor authentication reset successfully")
 			fmt.Println("Two-factor authentication reset successfully")
 		}
 	}
 
 	if listenIP != "" {
+		logger.Infof("Setting listen IP to %s...", listenIP)
 		err := settingService.SetListen(listenIP)
 		if err != nil {
+			logger.Errorf("Failed to set listen IP: %v", err)
 			fmt.Println("Failed to set listen IP:", err)
 		} else {
+			logger.Infof("Listen IP set successfully: %s", listenIP)
 			fmt.Printf("listen %v set successfully", listenIP)
 		}
 	}
@@ -310,42 +339,54 @@ func updateSetting(port int, username string, password string, webBasePath strin
 
 // updateCert updates the SSL certificate files for the panel.
 func updateCert(publicKey string, privateKey string) {
+	logger.Info("Initializing database for certificate update...")
 	err := database.InitDB(config.GetDBPath())
 	if err != nil {
+		logger.Errorf("Database initialization failed: %v", err)
 		fmt.Println(err)
 		return
 	}
 
 	if (privateKey != "" && publicKey != "") || (privateKey == "" && publicKey == "") {
+		logger.Info("Updating SSL certificates...")
 		settingService := service.SettingService{}
 		err = settingService.SetCertFile(publicKey)
 		if err != nil {
+			logger.Errorf("Set certificate public key failed: %v", err)
 			fmt.Println("set certificate public key failed:", err)
 		} else {
+			logger.Info("Certificate public key set successfully")
 			fmt.Println("set certificate public key success")
 		}
 
 		err = settingService.SetKeyFile(privateKey)
 		if err != nil {
+			logger.Errorf("Set certificate private key failed: %v", err)
 			fmt.Println("set certificate private key failed:", err)
 		} else {
+			logger.Info("Certificate private key set successfully")
 			fmt.Println("set certificate private key success")
 		}
 
 		err = settingService.SetSubCertFile(publicKey)
 		if err != nil {
+			logger.Errorf("Set certificate for subscription public key failed: %v", err)
 			fmt.Println("set certificate for subscription public key failed:", err)
 		} else {
+			logger.Info("Subscription certificate public key set successfully")
 			fmt.Println("set certificate for subscription public key success")
 		}
 
 		err = settingService.SetSubKeyFile(privateKey)
 		if err != nil {
+			logger.Errorf("Set certificate for subscription private key failed: %v", err)
 			fmt.Println("set certificate for subscription private key failed:", err)
 		} else {
+			logger.Info("Subscription certificate private key set successfully")
 			fmt.Println("set certificate for subscription private key success")
 		}
 	} else {
+		logger.Warning("Both public and private key should be entered")
 		fmt.Println("both public and private key should be entered.")
 	}
 }
@@ -375,7 +416,8 @@ func GetListenIP(getListen bool) {
 		settingService := service.SettingService{}
 		ListenIP, err := settingService.GetListen()
 		if err != nil {
-			log.Printf("Failed to retrieve listen IP: %v", err)
+			logger.Errorf("Failed to retrieve listen IP: %v", err)
+			fmt.Printf("Failed to retrieve listen IP: %v", err)
 			return
 		}
 
@@ -385,15 +427,19 @@ func GetListenIP(getListen bool) {
 
 // migrateDb performs database migration operations for the 3x-ui panel.
 func migrateDb() {
+	logger.InitLogger(logging.INFO)
 	inboundService := service.InboundService{}
 
+	logger.Info("Initializing database for migration...")
 	err := database.InitDB(config.GetDBPath())
 	if err != nil {
-		log.Fatal(err)
+		logger.Fatalf("Database initialization failed: %v", err)
 	}
 	fmt.Println("Start migrating database...")
+	logger.Info("Starting database migration...")
 	inboundService.MigrateDB()
 	fmt.Println("Migration done!")
+	logger.Info("Database migration completed successfully")
 }
 
 // main is the entry point of the 3x-ui application.
