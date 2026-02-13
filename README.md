@@ -3,7 +3,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="./media/3x-ui-cluster-dark.png">
-    <img alt="3x-ui-cluster" src="./media/3x-ui-cluster-light.png" width="30%">
+    <img alt="3x-ui-cluster" src="./media/3x-ui-cluster-light.png" width="20%">
   </picture>
 </p>
 

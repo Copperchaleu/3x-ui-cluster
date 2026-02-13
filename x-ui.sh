@@ -182,7 +182,8 @@ install() {
     LOGI "Downloading installation script..."
     local install_script=$(curl -Ls https://raw.githubusercontent.com/GrayPaul0320/3x-ui-cluster/main/install.sh 2>&1)
     
-    if [[ $? != 0 ]] || [[ -z "$install_script" ]] || echo "$install_script" | grep -qi "404\|not found\|error"; then
+    # Check if download was successful by verifying it starts with a shebang
+    if [[ $? != 0 ]] || [[ -z "$install_script" ]] || ! echo "$install_script" | head -n 1 | grep -q "^#!/"; then
         LOGE "Failed to download installation script."
         LOGE "Please check your network connection or try again later."
         before_show_menu
@@ -215,7 +216,8 @@ update() {
     LOGI "Downloading update script..."
     local update_script=$(curl -Ls https://raw.githubusercontent.com/GrayPaul0320/3x-ui-cluster/main/update.sh 2>&1)
     
-    if [[ $? != 0 ]] || [[ -z "$update_script" ]] || echo "$update_script" | grep -qi "404\|not found\|error"; then
+    # Check if download was successful by verifying it starts with a shebang
+    if [[ $? != 0 ]] || [[ -z "$update_script" ]] || ! echo "$update_script" | head -n 1 | grep -q "^#!/"; then
         LOGE "Failed to download update script."
         LOGE "Please check:"
         LOGE "  1. Your internet connection"
@@ -309,7 +311,8 @@ update_slave() {
     LOGI "Downloading installation script..."
     local install_script=$(curl -Ls https://raw.githubusercontent.com/GrayPaul0320/3x-ui-cluster/main/install.sh 2>&1)
 
-    if [[ $? != 0 ]] || [[ -z "$install_script" ]] || echo "$install_script" | grep -qi "404\|not found\|error"; then
+    # Check if download was successful by verifying it starts with a shebang
+    if [[ $? != 0 ]] || [[ -z "$install_script" ]] || ! echo "$install_script" | head -n 1 | grep -q "^#!/"; then
         LOGE "Failed to download installation script."
         LOGE "Please check your network connection or try again later."
         if [[ $# == 0 ]]; then
