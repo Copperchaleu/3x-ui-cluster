@@ -46,7 +46,7 @@ jobs:
           go-version-file: go.mod
           check-latest: true
 
-      - name: Build 3X-UI
+      - name: Build 3X-UI-CLUSTER for Linux ${{ matrix.platform }}
         run: |
           export CGO_ENABLED=1
           export GOOS=linux
@@ -89,7 +89,7 @@ jobs:
           cd x-ui/bin
           
           # Download dependencies
-          Xray_URL="https://github.com/XTLS/Xray-core/releases/download/v26.1.18/"
+          Xray_URL="https://github.com/XTLS/Xray-core/releases/download/latest/"
           if [ "${{ matrix.platform }}" == "amd64" ]; then
             wget -q ${Xray_URL}Xray-linux-64.zip
             unzip Xray-linux-64.zip
@@ -173,7 +173,7 @@ jobs:
           go-version-file: go.mod
           check-latest: true
 
-      - name: Build 3X-UI for Windows
+      - name: Build 3X-UI-CLUSTER for Windows
         shell: pwsh
         run: |
           $env:CGO_ENABLED="1"
@@ -187,7 +187,7 @@ jobs:
           cd x-ui\bin
           
           # Download Xray for Windows
-          $Xray_URL = "https://github.com/XTLS/Xray-core/releases/download/v26.1.18/"
+          $Xray_URL = "https://github.com/XTLS/Xray-core/releases/download/latest/"
           Invoke-WebRequest -Uri "${Xray_URL}Xray-windows-64.zip" -OutFile "Xray-windows-64.zip"
           Expand-Archive -Path "Xray-windows-64.zip" -DestinationPath .
           Remove-Item "Xray-windows-64.zip"
