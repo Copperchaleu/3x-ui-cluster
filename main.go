@@ -552,6 +552,9 @@ func main() {
 	case "migrate":
 		migrateDb()
 	case "setting":
+		// Initialize logger for setting commands
+		logger.InitLogger(logging.INFO)
+		
 		err := settingCmd.Parse(os.Args[2:])
 		if err != nil {
 			fmt.Println(err)
@@ -578,6 +581,9 @@ func main() {
 			updateTgbotEnableSts(enabletgbot)
 		}
 	case "cert":
+		// Initialize logger for cert commands
+		logger.InitLogger(logging.INFO)
+		
 		err := settingCmd.Parse(os.Args[2:])
 		if err != nil {
 			fmt.Println(err)
