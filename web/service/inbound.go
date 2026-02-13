@@ -365,6 +365,14 @@ func (s *InboundService) DelInbound(id int) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	
+	// Delete account_clients associations for this inbound
+	err = db.Where("inbound_id = ?", id).Delete(model.AccountClient{}).Error
+	if err != nil {
+		logger.Errorf("Failed to delete account_clients for inbound id=%d: %v", id, err)
+		return false, err
+	}
+	
 	inbound, err := s.GetInbound(id)
 	if err != nil {
 		logger.Errorf("Failed to get inbound id=%d for deletion: %v", id, err)
@@ -811,6 +819,14 @@ func (s *InboundService) DelInboundClient(inboundId int, clientId string) (bool,
 		logger.Error("Error in delete client IPs")
 		return false, err
 	}
+	
+	// Delete account_clients association if exists
+	if len(email) > 0 {
+		if err := db.Where("client_email = ?", email).Delete(&model.AccountClient{}).Error; err != nil {
+			logger.Warningf("Failed to delete account_clients for email %s: %v", email, err)
+		}
+	}
+	
 	needRestart := false
 
 	if len(email) > 0 {
@@ -2497,6 +2513,13 @@ func (s *InboundService) DelInboundClientByEmail(inboundId int, email string) (b
 	if err := s.DelClientIPs(db, email); err != nil {
 		logger.Error("Error in delete client IPs")
 		return false, err
+	}
+	
+	// remove account_clients association if exists
+	if len(email) > 0 {
+		if err := db.Where("client_email = ?", email).Delete(&model.AccountClient{}).Error; err != nil {
+			logger.Warningf("Failed to delete account_clients for email %s: %v", email, err)
+		}
 	}
 
 	needRestart := false

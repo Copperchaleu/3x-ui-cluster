@@ -96,7 +96,7 @@ bash <(curl -Ls https://raw.githubusercontent.com/GrayPaul0320/3x-ui-cluster/mai
 ### master和slave可以在同一个宿主机上吗？
 - 可以，master彻底移除了代理功能，只负责面板；理论上，安装在master所在的宿主机上的slave与其他slave并无区别。
 ### 账户是什么意思？
-- [3x-ui](https://github.com/MHSanaei/3x-ui)和[Xray-core](https://github.com/XTLS/Xray-core)中对于用户的定义通常是用email来实现的，一个email是不允许出现在多个inbound中的。因此，本项目引入了一个账户的概念，一个账户可以有多个email,每个email分别对应一个入站。
+- [3x-ui](https://github.com/MHSanaei/3x-ui)和[Xray-core](https://github.com/XTLS/Xray-core)中对于用户的定义通常是用email来实现的，一个email是不允许出现在多个inbound中的。由于本人不懂编程，本项目只能最大限度利用原项目中的特性，因此引入了一个账户的概念，一个账户可以有多个email,每个email分别对应一个入站。
 ### 账户的流量限制如何实现？
 - 本项目中，一个账户下的所有email的流量总和达到账户的流量额度，则停止该账户下的所有入站。也就是说，一个账户的流量额度，可以在一个入站中消耗完，也可以分在多个入站中。
 

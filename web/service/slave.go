@@ -208,7 +208,81 @@ func generateRandomSecret(length int) string {
 
 func (s *SlaveService) DeleteSlave(id int) error {
 	db := database.GetDB()
-	return db.Delete(&model.Slave{}, id).Error
+	
+	// Use transaction to ensure all deletes succeed or none
+	return db.Transaction(func(tx *gorm.DB) error {
+		logger.Infof("Starting cascade delete for slave %d", id)
+		
+		// 1. Delete all inbounds belonging to this slave
+		// This will cascade delete: client_traffics, inbound_client_ips, account_clients
+		var inbounds []*model.Inbound
+		if err := tx.Where("slave_id = ?", id).Find(&inbounds).Error; err != nil {
+			logger.Errorf("Failed to fetch inbounds for slave %d: %v", id, err)
+			return err
+		}
+		
+		logger.Infof("Found %d inbounds for slave %d", len(inbounds), id)
+		inboundService := InboundService{}
+		for _, inbound := range inbounds {
+			logger.Infof("Deleting inbound %d (tag: %s) for slave %d", inbound.Id, inbound.Tag, id)
+			if _, err := inboundService.DelInbound(inbound.Id); err != nil {
+				logger.Errorf("Failed to delete inbound %d for slave %d: %v", inbound.Id, id, err)
+				return err
+			}
+		}
+		
+		// 2. Delete slave certificates
+		logger.Infof("Deleting certificates for slave %d", id)
+		slaveCertService := SlaveCertService{}
+		if err := slaveCertService.DeleteCertsForSlave(id); err != nil {
+			logger.Warningf("Failed to delete certificates for slave %d: %v", id, err)
+			// Continue anyway, as certs might not exist
+		}
+		
+		// 3. Delete outbound traffics
+		logger.Infof("Deleting outbound traffics for slave %d", id)
+		if err := tx.Where("slave_id = ?", id).Delete(&model.OutboundTraffics{}).Error; err != nil {
+			logger.Errorf("Failed to delete outbound traffics for slave %d: %v", id, err)
+			return err
+		}
+		
+		// 4. Delete XrayOutbounds (if stored in database)
+		logger.Infof("Deleting xray outbounds for slave %d", id)
+		if err := tx.Where("slave_id = ?", id).Delete(&model.XrayOutbound{}).Error; err != nil {
+			logger.Errorf("Failed to delete xray outbounds for slave %d: %v", id, err)
+			return err
+		}
+		
+		// 5. Delete XrayRoutingRules
+		logger.Infof("Deleting xray routing rules for slave %d", id)
+		if err := tx.Where("slave_id = ?", id).Delete(&model.XrayRoutingRule{}).Error; err != nil {
+			logger.Errorf("Failed to delete xray routing rules for slave %d: %v", id, err)
+			return err
+		}
+		
+		// 6. Delete slave settings
+		logger.Infof("Deleting settings for slave %d", id)
+		if err := tx.Where("slave_id = ?", id).Delete(&model.SlaveSetting{}).Error; err != nil {
+			logger.Errorf("Failed to delete settings for slave %d: %v", id, err)
+			return err
+		}
+		
+		// 7. Finally, delete the slave itself
+		logger.Infof("Deleting slave record %d", id)
+		if err := tx.Delete(&model.Slave{}, id).Error; err != nil {
+			logger.Errorf("Failed to delete slave %d: %v", id, err)
+			return err
+		}
+		
+		// 8. Remove websocket connection (outside transaction)
+		// This is safe to do even if transaction fails
+		go func() {
+			s.RemoveSlaveConn(id)
+		}()
+		
+		logger.Infof("Successfully completed cascade delete for slave %d", id)
+		return nil
+	})
 }
 
 func (s *SlaveService) UpdateSlaveStatus(id int, status string, stats string) error {

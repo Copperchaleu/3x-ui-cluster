@@ -81,16 +81,19 @@ func (s *SlaveController) delSlave(c *gin.Context) {
 	}
     id, _ := strconv.Atoi(c.Param("id"))
     
-    // Delete slave settings first
-    slaveSettingService := service.SlaveSettingService{}
-    if err := slaveSettingService.DeleteAllSettingsForSlave(id); err != nil {
-         logger.Warningf("Failed to delete settings for slave %d: %v", id, err)
-    }
+    logger.Infof("Deleting slave %d with cascade", id)
     
+    // DeleteSlave now handles all cascade deletions:
+    // - inbounds, clients, traffics, IPs, account associations
+    // - slave certs, outbound traffics, xray outbounds/routing rules
+    // - slave settings
     if err := s.slaveService.DeleteSlave(id); err != nil {
+         logger.Errorf("Failed to delete slave %d: %v", id, err)
          c.JSON(http.StatusInternalServerError, gin.H{"success": false, "msg": err.Error()})
          return
     }
+    
+    logger.Infof("Successfully deleted slave %d", id)
     c.JSON(http.StatusOK, gin.H{"success": true, "msg": "Slave deleted"})
 }
 
