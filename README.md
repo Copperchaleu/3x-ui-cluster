@@ -1,7 +1,7 @@
 # 3X-UI Cluster
 
 <p align="center">
-  <picture>
+  <picture width="30%">
     <source media="(prefers-color-scheme: dark)" srcset="./media/3x-ui-cluster-dark.png">
     <img alt="3x-ui-cluster" src="./media/3x-ui-cluster-light.png">
   </picture>
