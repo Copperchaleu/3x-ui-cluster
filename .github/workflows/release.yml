@@ -177,16 +177,12 @@ jobs:
       - name: Build 3X-UI-CLUSTER for Windows
         shell: pwsh
         run: |
-          export PATH="/c/hostedtoolcache/windows/go/$(ls /c/hostedtoolcache/windows/go | sort -V | tail -n1)/x64/bin:$PATH"
+          $env:CGO_ENABLED = "0"
+          $env:GOOS = "windows"
+          $env:GOARCH = "amd64"
 
-          export CGO_ENABLED=1
-          export GOOS=windows
-          export GOARCH=amd64
-          export CC=x86_64-w64-mingw32-gcc
-
-          which go
+          Write-Host "Go version:"
           go version
-          gcc --version
 
           go build -ldflags "-w -s" -o xui-release.exe -v main.go
 
