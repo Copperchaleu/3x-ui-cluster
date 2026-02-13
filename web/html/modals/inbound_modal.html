@@ -315,7 +315,7 @@
                     
                     inModal.loading(true);
                     try {
-                        const res = await HttpUtil.get(`/panel/api/slave-certs/slave/${this.dbInbound.slaveId}`);
+                        const res = await HttpUtil.get(`/panel/api/slave/cert/list/${this.dbInbound.slaveId}`);
                         inModal.loading(false);
                         
                         if (!res.success) {

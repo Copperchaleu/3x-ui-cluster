@@ -108,3 +108,7 @@ bash <(curl -Ls https://raw.githubusercontent.com/GrayPaul0320/3x-ui-cluster/mai
 ## 📄 许可证
 
 [GPL-3.0 License](https://www.gnu.org/licenses/gpl-3.0.en.html)
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=GrayPaul0320/3x-ui-cluster&type=date&legend=top-left)](https://www.star-history.com/#GrayPaul0320/3x-ui-cluster&type=date&legend=top-left)
