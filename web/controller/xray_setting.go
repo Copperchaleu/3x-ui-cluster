@@ -38,9 +38,10 @@ func (a *XraySettingController) initRouter(g *gin.RouterGroup) {
 	g.POST("/warp/:action", a.warp)
 	g.POST("/update", a.updateSetting)
 	g.POST("/resetOutboundsTraffic", a.resetOutboundsTraffic)
+	g.POST("/testOutbound", a.testOutbound)
 }
 
-// getXraySetting retrieves the Xray configuration template and inbound tags.
+// getXraySetting retrieves the Xray configuration template, inbound tags, and outbound test URL.
 func (a *XraySettingController) getXraySetting(c *gin.Context) {
 	slaveIdStr := c.PostForm("slaveId")
 	slaveId, _ := strconv.Atoi(slaveIdStr)
@@ -61,8 +62,21 @@ func (a *XraySettingController) getXraySetting(c *gin.Context) {
 		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.getSettings"), err)
 		return
 	}
-	xrayResponse := "{ \"xraySetting\": " + xraySetting + ", \"inboundTags\": " + inboundTags + " }"
-	jsonObj(c, xrayResponse, nil)
+	outboundTestUrl, _ := a.SettingService.GetXrayOutboundTestUrl()
+	if outboundTestUrl == "" {
+		outboundTestUrl = "https://www.google.com/generate_204"
+	}
+	xrayResponse := map[string]interface{}{
+		"xraySetting":     json.RawMessage(xraySetting),
+		"inboundTags":     json.RawMessage(inboundTags),
+		"outboundTestUrl": outboundTestUrl,
+	}
+	result, err := json.Marshal(xrayResponse)
+	if err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.getSettings"), err)
+		return
+	}
+	jsonObj(c, string(result), nil)
 }
 
 // updateSetting updates the Xray configuration settings.
@@ -165,4 +179,27 @@ func (a *XraySettingController) resetOutboundsTraffic(c *gin.Context) {
 		return
 	}
 	jsonObj(c, "", nil)
+}
+
+// testOutbound tests an outbound configuration and returns the delay/response time.
+// Optional form "allOutbounds": JSON array of all outbounds; used to resolve sockopt.dialerProxy dependencies.
+func (a *XraySettingController) testOutbound(c *gin.Context) {
+	outboundJSON := c.PostForm("outbound")
+	allOutboundsJSON := c.PostForm("allOutbounds")
+
+	if outboundJSON == "" {
+		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), common.NewError("outbound parameter is required"))
+		return
+	}
+
+	// Load the test URL from server settings to prevent SSRF via user-controlled URLs
+	testURL, _ := a.SettingService.GetXrayOutboundTestUrl()
+
+	result, err := a.OutboundService.TestOutbound(outboundJSON, testURL, allOutboundsJSON)
+	if err != nil {
+		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
+		return
+	}
+
+	jsonObj(c, result, nil)
 }

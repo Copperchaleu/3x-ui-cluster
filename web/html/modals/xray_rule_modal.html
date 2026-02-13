@@ -235,8 +235,8 @@
       rule.sourcePort = value.sourcePort;
       rule.vlessRoute = value.vlessRoute;
       rule.network = value.network;
-      rule.sourceIP = value.sourceIP.length > 0 ? value.sourceIP.split(',') : [];
-      rule.user = value.user.length > 0 ? value.user.split(',') : [];
+      rule.sourceIP = value.sourceIP.length > 0 ? value.sourceIP.split(',').map(s => s.trim()) : [];
+      rule.user = value.user.length > 0 ? value.user.split(',').map(s => s.trim()) : [];
       rule.inboundTag = value.inboundTag;
       rule.protocol = value.protocol;
       rule.attrs = Object.fromEntries(value.attrs);

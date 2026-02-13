@@ -109,6 +109,15 @@ func NewProcess(xrayConfig *Config) *Process {
 	return p
 }
 
+// NewTestProcess creates a new Xray process that uses a specific config file path.
+// Used for test runs (e.g. outbound test) so the main config.json is not overwritten.
+// The config file at configPath is removed when the process is stopped.
+func NewTestProcess(xrayConfig *Config, configPath string) *Process {
+	p := &Process{newTestProcess(xrayConfig, configPath)}
+	runtime.SetFinalizer(p, stopProcess)
+	return p
+}
+
 type process struct {
 	cmd *exec.Cmd
 
@@ -117,10 +126,11 @@ type process struct {
 
 	onlineClients []string
 
-	config    *Config
-	logWriter *LogWriter
-	exitErr   error
-	startTime time.Time
+	config     *Config
+	configPath string // if set, use this path instead of GetConfigPath() and remove on Stop
+	logWriter  *LogWriter
+	exitErr    error
+	startTime  time.Time
 }
 
 // newProcess creates a new internal process struct for Xray.
@@ -131,6 +141,13 @@ func newProcess(config *Config) *process {
 		logWriter: NewLogWriter(),
 		startTime: time.Now(),
 	}
+}
+
+// newTestProcess creates a process that writes and runs with a specific config path.
+func newTestProcess(config *Config, configPath string) *process {
+	p := newProcess(config)
+	p.configPath = configPath
+	return p
 }
 
 // IsRunning returns true if the Xray process is currently running.
@@ -283,6 +300,26 @@ func (p *process) Stop() error {
 	if !p.IsRunning() {
 		logger.Warning("Xray process is not running")
 		return errors.New("xray is not running")
+	}
+
+	// Remove temporary config file used for test runs so main config is never touched
+	if p.configPath != "" {
+		if p.configPath != GetConfigPath() {
+			// Check if file exists before removing
+			if _, err := os.Stat(p.configPath); err == nil {
+				_ = os.Remove(p.configPath)
+			}
+		}
+	}
+
+	// Remove temporary config file used for test runs so main config is never touched
+	if p.configPath != "" {
+		if p.configPath != GetConfigPath() {
+			// Check if file exists before removing
+			if _, err := os.Stat(p.configPath); err == nil {
+				_ = os.Remove(p.configPath)
+			}
+		}
 	}
 
 	var err error

@@ -1547,7 +1547,7 @@ ssl_cert_issue_for_ip() {
     local reloadCmd="systemctl restart x-ui 2>/dev/null || rc-service x-ui restart 2>/dev/null"
     
     # issue the certificate for IP with shortlived profile
-    ~/.acme.sh/acme.sh --set-default-ca --server letsencrypt
+    ~/.acme.sh/acme.sh --set-default-ca --server letsencrypt --force
     ~/.acme.sh/acme.sh --issue \
         ${domain_args} \
         --standalone \
@@ -1712,7 +1712,7 @@ ssl_cert_issue() {
     LOGI "Will use port: ${WebPort} to issue certificates. Please make sure this port is open."
 
     # issue the certificate
-    ~/.acme.sh/acme.sh --set-default-ca --server letsencrypt
+    ~/.acme.sh/acme.sh --set-default-ca --server letsencrypt --force
     ~/.acme.sh/acme.sh --issue -d ${domain} --listen-v6 --standalone --httpport ${WebPort} --force
     if [ $? -ne 0 ]; then
         LOGE "Issuing certificate failed, please check logs."
@@ -1839,7 +1839,7 @@ ssl_cert_issue_CF() {
         LOGD "Your registered email address is: ${CF_AccountEmail}"
 
         # Set the default CA to Let's Encrypt
-        ~/.acme.sh/acme.sh --set-default-ca --server letsencrypt
+        ~/.acme.sh/acme.sh --set-default-ca --server letsencrypt --force
         if [ $? -ne 0 ]; then
             LOGE "Default CA, Let'sEncrypt fail, script exiting..."
             exit 1
@@ -2383,11 +2383,15 @@ SSH_port_forwarding() {
     )
     local server_ip=""
     for ip_address in "${URL_lists[@]}"; do
-        server_ip=$(curl -s --max-time 3 "${ip_address}" 2>/dev/null | tr -d '[:space:]')
-        if [[ -n "${server_ip}" ]]; then
+        local response=$(curl -s -w "\n%{http_code}" --max-time 3 "${ip_address}" 2>/dev/null)
+        local http_code=$(echo "$response" | tail -n1)
+        local ip_result=$(echo "$response" | head -n-1 | tr -d '[:space:]')
+        if [[ "${http_code}" == "200" && -n "${ip_result}" ]]; then
+            server_ip="${ip_result}"
             break
         fi
     done
+
     local existing_webBasePath=$(${xui_folder}/x-ui setting -show true | grep -Eo 'webBasePath: .+' | awk '{print $2}')
     local existing_port=$(${xui_folder}/x-ui setting -show true | grep -Eo 'port: .+' | awk '{print $2}')
     local existing_listenIP=$(${xui_folder}/x-ui setting -getListen true | grep -Eo 'listenIP: .+' | awk '{print $2}')

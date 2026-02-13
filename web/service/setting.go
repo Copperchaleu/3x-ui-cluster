@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+    "net"
 	"reflect"
 	"strconv"
 	"strings"
@@ -78,6 +79,8 @@ var defaultValueMap = map[string]string{
 	"warp":                        "",
 	"externalTrafficInformEnable": "false",
 	"externalTrafficInformURI":    "",
+	"xrayOutboundTestUrl":         "https://www.google.com/generate_204",
+
 	// LDAP defaults
 	"ldapEnable":            "false",
 	"ldapHost":              "",
@@ -269,6 +272,14 @@ func (s *SettingService) setInt(key string, value int) error {
 
 func (s *SettingService) GetXrayConfigTemplate() (string, error) {
 	return s.getString("xrayTemplateConfig")
+}
+
+func (s *SettingService) GetXrayOutboundTestUrl() (string, error) {
+	return s.getString("xrayOutboundTestUrl")
+}
+
+func (s *SettingService) SetXrayOutboundTestUrl(url string) error {
+	return s.setString("xrayOutboundTestUrl", url)
 }
 
 func (s *SettingService) GetListen() (string, error) {
@@ -709,6 +720,28 @@ func (s *SettingService) GetDefaultXrayConfig() (any, error) {
 	return jsonData, nil
 }
 
+func extractHostname(host string) string {
+    h, _, err := net.SplitHostPort(host)
+    // Err is not nil means host does not contain port
+    if err != nil {
+        h = host
+    }
+
+    ip := net.ParseIP(h)
+    // If it's not an IP, return as is
+    if ip == nil {
+        return h
+    }
+
+    // If it's an IPv4, return as is
+    if ip.To4() != nil {
+        return h
+    }
+
+    // IPv6 needs bracketing
+    return "[" + h + "]"
+}
+
 func (s *SettingService) GetDefaultSettings(host string) (any, error) {
 	type settingFunc func() (any, error)
 	settings := map[string]settingFunc{
@@ -769,7 +802,7 @@ func (s *SettingService) GetDefaultSettings(host string) (any, error) {
 			subTLS = true
 		}
 		if subDomain == "" {
-			subDomain = strings.Split(host, ":")[0]
+			subDomain = extractHostname(host)
 		}
 		if subTLS {
 			subURI = "https://"

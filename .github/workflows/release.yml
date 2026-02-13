@@ -90,6 +90,7 @@ jobs:
           
           # Download dependencies
           Xray_URL="https://github.com/XTLS/Xray-core/releases/download/latest/"
+          Xray_URL="https://github.com/XTLS/Xray-core/releases/download/v26.2.6/"
           if [ "${{ matrix.platform }}" == "amd64" ]; then
             wget -q ${Xray_URL}Xray-linux-64.zip
             unzip Xray-linux-64.zip
@@ -176,13 +177,24 @@ jobs:
       - name: Build 3X-UI-CLUSTER for Windows
         shell: pwsh
         run: |
-          $env:CGO_ENABLED="1"
-          $env:GOOS="windows"
-          $env:GOARCH="amd64"
+          export PATH="/c/hostedtoolcache/windows/go/$(ls /c/hostedtoolcache/windows/go | sort -V | tail -n1)/x64/bin:$PATH"
+
+          export CGO_ENABLED=1
+          export GOOS=windows
+          export GOARCH=amd64
+          export CC=x86_64-w64-mingw32-gcc
+
+          which go
+          go version
+          gcc --version
+
           go build -ldflags "-w -s" -o xui-release.exe -v main.go
-          
+
+      - name: Copy and download resources
+        shell: pwsh
+        run: |
           mkdir x-ui
-          Copy-Item xui-release.exe x-ui\
+          Copy-Item xui-release.exe x-ui\x-ui.exe
           mkdir x-ui\bin
           cd x-ui\bin
           
