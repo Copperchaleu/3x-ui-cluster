@@ -180,7 +180,7 @@ before_show_menu() {
 
 install() {
     LOGI "Downloading installation script..."
-    local install_script=$(curl -Ls https://raw.githubusercontent.com/GrayPaul0320/3x-ui-cluster/main/install.sh 2>&1)
+    local install_script=$(curl -Ls https://raw.githubusercontent.com/Copperchaleu/3x-ui-cluster/main/install.sh 2>&1)
     
     # Check if download was successful by verifying it starts with a shebang
     if [[ $? != 0 ]] || [[ -z "$install_script" ]] || ! echo "$install_script" | head -n 1 | grep -q "^#!/"; then
@@ -214,7 +214,7 @@ update() {
     fi
     
     LOGI "Downloading update script..."
-    local update_script=$(curl -Ls https://raw.githubusercontent.com/GrayPaul0320/3x-ui-cluster/main/update.sh 2>&1)
+    local update_script=$(curl -Ls https://raw.githubusercontent.com/Copperchaleu/3x-ui-cluster/main/update.sh 2>&1)
     
     # Check if download was successful by verifying it starts with a shebang
     if [[ $? != 0 ]] || [[ -z "$update_script" ]] || ! echo "$update_script" | head -n 1 | grep -q "^#!/"; then
@@ -251,7 +251,7 @@ update_menu() {
     LOGI "Downloading menu script..."
     local temp_file="/tmp/x-ui-menu-$$.sh"
     
-    curl -fsSL -o "$temp_file" https://raw.githubusercontent.com/GrayPaul0320/3x-ui-cluster/main/x-ui.sh 2>/dev/null
+    curl -fsSL -o "$temp_file" https://raw.githubusercontent.com/Copperchaleu/3x-ui-cluster/main/x-ui.sh 2>/dev/null
     
     if [[ $? != 0 ]] || [[ ! -f "$temp_file" ]] || [[ ! -s "$temp_file" ]]; then
         LOGE "Failed to download menu script."
@@ -309,7 +309,7 @@ update_slave() {
     slave_secret="${params##*|}"
 
     LOGI "Downloading installation script..."
-    local install_script=$(curl -Ls https://raw.githubusercontent.com/GrayPaul0320/3x-ui-cluster/main/install.sh 2>&1)
+    local install_script=$(curl -Ls https://raw.githubusercontent.com/Copperchaleu/3x-ui-cluster/main/install.sh 2>&1)
 
     # Check if download was successful by verifying it starts with a shebang
     if [[ $? != 0 ]] || [[ -z "$install_script" ]] || ! echo "$install_script" | head -n 1 | grep -q "^#!/"; then
@@ -344,7 +344,7 @@ legacy_version() {
         exit 1
     fi
     # Use the entered panel version in the download link
-    install_command="bash <(curl -Ls "https://raw.githubusercontent.com/GrayPaul0320/3x-ui-cluster/v$tag_version/install.sh") v$tag_version"
+    install_command="bash <(curl -Ls "https://raw.githubusercontent.com/Copperchaleu/3x-ui-cluster/v$tag_version/install.sh") v$tag_version"
 
     echo "Downloading and installing panel version $tag_version..."
     eval $install_command
@@ -383,7 +383,7 @@ uninstall() {
     echo ""
     echo -e "Uninstalled Successfully.\n"
     echo "If you need to install this panel again, you can use below command:"
-    echo -e "${green}bash <(curl -Ls https://raw.githubusercontent.com/GrayPaul0320/3x-ui-cluster/main/install.sh)${plain}"
+    echo -e "${green}bash <(curl -Ls https://raw.githubusercontent.com/Copperchaleu/3x-ui-cluster/main/install.sh)${plain}"
     echo ""
     # Trap the SIGTERM signal
     trap delete_script SIGTERM
@@ -418,7 +418,7 @@ uninstall_slave() {
     echo ""
     echo -e "Uninstalled Successfully.\n"
     echo "If you need to install this slave again, you can use below command:"
-    echo -e "${green}bash <(curl -Ls https://raw.githubusercontent.com/GrayPaul0320/3x-ui-cluster/main/install.sh) slave <master_url> <secret>${plain}"
+    echo -e "${green}bash <(curl -Ls https://raw.githubusercontent.com/Copperchaleu/3x-ui-cluster/main/install.sh) slave <master_url> <secret>${plain}"
     echo ""
     trap delete_script SIGTERM
     delete_script
@@ -824,7 +824,7 @@ enable_bbr() {
 }
 
 update_shell() {
-    curl -fLRo /usr/bin/x-ui -z /usr/bin/x-ui https://github.com/GrayPaul0320/3x-ui-cluster/raw/main/x-ui.sh
+    curl -fLRo /usr/bin/x-ui -z /usr/bin/x-ui https://github.com/Copperchaleu/3x-ui-cluster/raw/main/x-ui.sh
     if [[ $? != 0 ]]; then
         echo ""
         LOGE "Failed to download script, Please check whether the machine can connect Github"

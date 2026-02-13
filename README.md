@@ -7,8 +7,8 @@
   </picture>
 </p>
 
-[![Release](https://img.shields.io/github/v/release/GrayPaul0320/3x-ui-cluster.svg)](https://github.com/GrayPaul0320/3x-ui-cluster/releases)
-[![Build](https://img.shields.io/github/actions/workflow/status/GrayPaul0320/3x-ui-cluster/release.yml.svg)](https://github.com/GrayPaul0320/3x-ui-cluster/actions)
+[![Release](https://img.shields.io/github/v/release/Copperchaleu/3x-ui-cluster.svg)](https://github.com/Copperchaleu/3x-ui-cluster/releases)
+[![Build](https://img.shields.io/github/actions/workflow/status/Copperchaleu/3x-ui-cluster/release.yml.svg)](https://github.com/Copperchaleu/3x-ui-cluster/actions)
 [![License](https://img.shields.io/badge/license-GPL%20V3-blue.svg?longCache=true)](https://www.gnu.org/licenses/gpl-3.0.en.html)
 
 > [!NOTE]
@@ -37,7 +37,7 @@
 ### 安装 Master 节点
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/GrayPaul0320/3x-ui-cluster/main/install.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/Copperchaleu/3x-ui-cluster/main/install.sh)
 ```
 
 ### 安装 Slave 节点
@@ -46,7 +46,7 @@ bash <(curl -Ls https://raw.githubusercontent.com/GrayPaul0320/3x-ui-cluster/mai
 
 安装命令格式：
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/GrayPaul0320/3x-ui-cluster/main/install.sh) slave <MASTER_URL> <SECRET>
+bash <(curl -Ls https://raw.githubusercontent.com/Copperchaleu/3x-ui-cluster/main/install.sh) slave <MASTER_URL> <SECRET>
 ```
 
 
@@ -92,4 +92,4 @@ bash <(curl -Ls https://raw.githubusercontent.com/GrayPaul0320/3x-ui-cluster/mai
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=GrayPaul0320/3x-ui-cluster&type=date&legend=top-left)](https://www.star-history.com/#GrayPaul0320/3x-ui-cluster&type=date&legend=top-left)
+[![Star History Chart](https://api.star-history.com/svg?repos=Copperchaleu/3x-ui-cluster&type=date&legend=top-left)](https://www.star-history.com/#Copperchaleu/3x-ui-cluster&type=date&legend=top-left)

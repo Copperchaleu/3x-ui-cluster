@@ -801,17 +801,17 @@ update_x-ui() {
     tag_version=""
     
     echo -e "${yellow}Fetching version info...${plain}"
-    tag_version=$(get_latest_version "https://api.github.com/repos/GrayPaul0320/3x-ui-cluster/releases/latest" "false")
+    tag_version=$(get_latest_version "https://api.github.com/repos/Copperchaleu/3x-ui-cluster/releases/latest" "false")
     
     if [[ -z "$tag_version" ]]; then
         echo -e "${yellow}Trying with IPv4...${plain}"
-        tag_version=$(get_latest_version "https://api.github.com/repos/GrayPaul0320/3x-ui-cluster/releases/latest" "true")
+        tag_version=$(get_latest_version "https://api.github.com/repos/Copperchaleu/3x-ui-cluster/releases/latest" "true")
     fi
     
     # If still no version, try alternative method (scraping releases page)
     if [[ -z "$tag_version" ]]; then
         echo -e "${yellow}Trying alternative method...${plain}"
-        tag_version=$(${curl_bin} -Ls "https://github.com/GrayPaul0320/3x-ui-cluster/releases/latest" 2>/dev/null | \
+        tag_version=$(${curl_bin} -Ls "https://github.com/Copperchaleu/3x-ui-cluster/releases/latest" 2>/dev/null | \
             grep -oP '(?<=tag/)v?[0-9]+\.[0-9]+\.[0-9]+' | head -n 1)
     fi
     
@@ -835,7 +835,7 @@ update_x-ui() {
     
     # Download with better error handling
     download_success=false
-    download_url="https://github.com/GrayPaul0320/3x-ui-cluster/releases/download/${tag_version}/x-ui-linux-$(arch).tar.gz"
+    download_url="https://github.com/Copperchaleu/3x-ui-cluster/releases/download/${tag_version}/x-ui-linux-$(arch).tar.gz"
     output_file="${xui_folder}-linux-$(arch).tar.gz"
     
     # First attempt
@@ -930,7 +930,7 @@ update_x-ui() {
     temp_script="/tmp/x-ui-script-$$.sh"
     
     # Try to download
-    ${curl_bin} -fsSL -o "$temp_script" https://raw.githubusercontent.com/GrayPaul0320/3x-ui-cluster/main/x-ui.sh 2>/dev/null
+    ${curl_bin} -fsSL -o "$temp_script" https://raw.githubusercontent.com/Copperchaleu/3x-ui-cluster/main/x-ui.sh 2>/dev/null
     if [[ $? -eq 0 ]] && [[ -f "$temp_script" ]] && [[ -s "$temp_script" ]]; then
         if head -n 1 "$temp_script" | grep -q '^#!/bin/bash'; then
             script_downloaded=true
@@ -941,7 +941,7 @@ update_x-ui() {
     if [[ "$script_downloaded" != "true" ]]; then
         echo -e "${yellow}Trying with IPv4...${plain}"
         rm -f "$temp_script" 2>/dev/null
-        ${curl_bin} -4fsSL -o "$temp_script" https://raw.githubusercontent.com/GrayPaul0320/3x-ui-cluster/main/x-ui.sh 2>/dev/null
+        ${curl_bin} -4fsSL -o "$temp_script" https://raw.githubusercontent.com/Copperchaleu/3x-ui-cluster/main/x-ui.sh 2>/dev/null
         if [[ $? -eq 0 ]] && [[ -f "$temp_script" ]] && [[ -s "$temp_script" ]]; then
             if head -n 1 "$temp_script" | grep -q '^#!/bin/bash'; then
                 script_downloaded=true

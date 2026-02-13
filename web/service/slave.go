@@ -487,7 +487,7 @@ func (s *SlaveService) GenerateInstallCommand(slaveId int, req *http.Request, ba
 	masterUrl := fmt.Sprintf("%s://%s%s", scheme, host, basePath)
 	
 	// Generate install command
-	command := fmt.Sprintf("bash <(curl -Ls https://raw.githubusercontent.com/GrayPaul0320/3x-ui-cluster/main/install.sh) slave %s %s",
+	command := fmt.Sprintf("bash <(curl -Ls https://raw.githubusercontent.com/Copperchaleu/3x-ui-cluster/main/install.sh) slave %s %s",
 		masterUrl, slave.Secret)
 	
 	return command, nil

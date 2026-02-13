@@ -83,7 +83,7 @@ get_latest_version() {
     fi
     
     # Try to get version
-    local response=$(curl $curl_opts "https://api.github.com/repos/GrayPaul0320/3x-ui-cluster/releases/latest" 2>&1)
+    local response=$(curl $curl_opts "https://api.github.com/repos/Copperchaleu/3x-ui-cluster/releases/latest" 2>&1)
     local exit_code=$?
     
     if [[ $exit_code -eq 0 ]] && ! echo "$response" | grep -qi "404\\|not found\\|error\\|rate limit"; then
@@ -811,7 +811,7 @@ install_x-ui_slave() {
     echo -e "${green}Latest version: ${tag_version}${plain}"
     echo -e "${green}Downloading x-ui package...${plain}"
     
-    local download_url="https://github.com/GrayPaul0320/3x-ui-cluster/releases/download/${tag_version}/x-ui-linux-$(arch).tar.gz"
+    local download_url="https://github.com/Copperchaleu/3x-ui-cluster/releases/download/${tag_version}/x-ui-linux-$(arch).tar.gz"
     curl -fLR --progress-bar -o "${xui_folder}-linux-$(arch).tar.gz" "$download_url"
     
     if [[ $? -ne 0 ]]; then
@@ -848,7 +848,7 @@ install_x-ui_slave() {
     # Install management script for slave
     echo -e "${green}Downloading x-ui.sh management script...${plain}"
     local temp_script="/tmp/x-ui-slave-$$.sh"
-    curl -fsSL -o "${temp_script}" https://raw.githubusercontent.com/GrayPaul0320/3x-ui-cluster/main/x-ui.sh 2>/dev/null
+    curl -fsSL -o "${temp_script}" https://raw.githubusercontent.com/Copperchaleu/3x-ui-cluster/main/x-ui.sh 2>/dev/null
     if [[ $? -ne 0 ]] || [[ ! -s "${temp_script}" ]]; then
         echo -e "${red}Failed to download x-ui.sh script${plain}"
         rm -f "${temp_script}" 2>/dev/null
@@ -881,7 +881,7 @@ install_x-ui_slave() {
         cat > ${xui_service}/x-ui-slave.service <<EOF
 [Unit]
 Description=x-ui Slave Service
-Documentation=https://github.com/GrayPaul0320/3x-ui-cluster
+Documentation=https://github.com/Copperchaleu/3x-ui-cluster
 After=network.target nss-lookup.target
 
 [Service]
@@ -1011,7 +1011,7 @@ install_x-ui() {
         echo -e "${green}✓ Latest version: ${tag_version}${plain}"
         echo -e "${green}Downloading x-ui package...${plain}"
         
-        download_url="https://github.com/GrayPaul0320/3x-ui-cluster/releases/download/${tag_version}/x-ui-linux-$(arch).tar.gz"
+        download_url="https://github.com/Copperchaleu/3x-ui-cluster/releases/download/${tag_version}/x-ui-linux-$(arch).tar.gz"
         curl -fLR --progress-bar -o "${xui_folder}-linux-$(arch).tar.gz" "$download_url"
         
         if [[ $? -ne 0 ]]; then
@@ -1032,7 +1032,7 @@ install_x-ui() {
             exit 1
         fi
         
-        url="https://github.com/GrayPaul0320/3x-ui-cluster/releases/download/${tag_version}/x-ui-linux-$(arch).tar.gz"
+        url="https://github.com/Copperchaleu/3x-ui-cluster/releases/download/${tag_version}/x-ui-linux-$(arch).tar.gz"
         echo -e "Beginning to install x-ui $1"
         curl -fLR --progress-bar -o "${xui_folder}-linux-$(arch).tar.gz" "${url}"
         if [[ $? -ne 0 ]]; then
@@ -1045,7 +1045,7 @@ install_x-ui() {
     temp_script="/tmp/x-ui-install-$$.sh"
     
     # Try to download x-ui.sh with better error handling
-    curl -fsSL -o "$temp_script" https://raw.githubusercontent.com/GrayPaul0320/3x-ui-cluster/main/x-ui.sh 2>/dev/null
+    curl -fsSL -o "$temp_script" https://raw.githubusercontent.com/Copperchaleu/3x-ui-cluster/main/x-ui.sh 2>/dev/null
     
     if [[ $? -ne 0 ]] || [[ ! -f "$temp_script" ]] || [[ ! -s "$temp_script" ]]; then
         echo -e "${red}Failed to download x-ui.sh script${plain}"
@@ -1109,7 +1109,7 @@ install_x-ui() {
     fi
     
     if [[ $release == "alpine" ]]; then
-        curl -4fLRo /etc/init.d/x-ui https://raw.githubusercontent.com/GrayPaul0320/3x-ui-cluster/main/x-ui.rc
+        curl -4fLRo /etc/init.d/x-ui https://raw.githubusercontent.com/Copperchaleu/3x-ui-cluster/main/x-ui.rc
         if [[ $? -ne 0 ]]; then
             echo -e "${red}Failed to download x-ui.rc${plain}"
             exit 1
@@ -1166,13 +1166,13 @@ install_x-ui() {
             echo -e "${yellow}Service files not found in tar.gz, downloading from GitHub...${plain}"
             case "${release}" in
                 ubuntu | debian | armbian)
-                    curl -4fLRo ${xui_service}/x-ui.service https://raw.githubusercontent.com/GrayPaul0320/3x-ui-cluster/main/x-ui.service.debian >/dev/null 2>&1
+                    curl -4fLRo ${xui_service}/x-ui.service https://raw.githubusercontent.com/Copperchaleu/3x-ui-cluster/main/x-ui.service.debian >/dev/null 2>&1
                 ;;
                 arch | manjaro | parch)
-                    curl -4fLRo ${xui_service}/x-ui.service https://raw.githubusercontent.com/GrayPaul0320/3x-ui-cluster/main/x-ui.service.arch >/dev/null 2>&1
+                    curl -4fLRo ${xui_service}/x-ui.service https://raw.githubusercontent.com/Copperchaleu/3x-ui-cluster/main/x-ui.service.arch >/dev/null 2>&1
                 ;;
                 *)
-                    curl -4fLRo ${xui_service}/x-ui.service https://raw.githubusercontent.com/GrayPaul0320/3x-ui-cluster/main/x-ui.service.rhel >/dev/null 2>&1
+                    curl -4fLRo ${xui_service}/x-ui.service https://raw.githubusercontent.com/Copperchaleu/3x-ui-cluster/main/x-ui.service.rhel >/dev/null 2>&1
                 ;;
             esac
             

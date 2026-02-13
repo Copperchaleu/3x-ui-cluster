@@ -24,7 +24,9 @@ import (
 
 // OutboundService provides business logic for managing Xray outbound configurations.
 // It handles outbound traffic monitoring and statistics.
-type OutboundService struct{}
+type OutboundService struct {
+	SlaveSettingService SlaveSettingService
+}
 
 // testSemaphore limits concurrent outbound tests to prevent resource exhaustion.
 var testSemaphore sync.Mutex
@@ -419,4 +421,167 @@ func createTestConfigPath() (string, error) {
 		return "", err
 	}
 	return path, nil
+}
+
+// ===== Template-based Outbound Rule Management =====
+
+// getTemplateOutbounds parses the xrayTemplateConfig for a slave and returns the outbounds array
+func (s *OutboundService) getTemplateOutbounds(slaveId int) ([]map[string]interface{}, error) {
+	templateJson, err := s.SlaveSettingService.GetXrayConfigForSlave(slaveId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get xray template config for slave %d: %v", slaveId, err)
+	}
+
+	var config map[string]interface{}
+	if err := json.Unmarshal([]byte(templateJson), &config); err != nil {
+		return nil, fmt.Errorf("failed to parse xray template config: %v", err)
+	}
+
+	outboundsRaw, ok := config["outbounds"]
+	if !ok {
+		return []map[string]interface{}{}, nil
+	}
+
+	outboundsArr, ok := outboundsRaw.([]interface{})
+	if !ok {
+		return []map[string]interface{}{}, nil
+	}
+
+	result := make([]map[string]interface{}, 0, len(outboundsArr))
+	for _, item := range outboundsArr {
+		if m, ok := item.(map[string]interface{}); ok {
+			result = append(result, m)
+		}
+	}
+	return result, nil
+}
+
+// saveTemplateOutbounds updates the outbounds array in xrayTemplateConfig for a slave and saves it
+func (s *OutboundService) saveTemplateOutbounds(slaveId int, outbounds []map[string]interface{}) error {
+	templateJson, err := s.SlaveSettingService.GetXrayConfigForSlave(slaveId)
+	if err != nil {
+		return fmt.Errorf("failed to get xray template config for slave %d: %v", slaveId, err)
+	}
+
+	var config map[string]interface{}
+	if err := json.Unmarshal([]byte(templateJson), &config); err != nil {
+		return fmt.Errorf("failed to parse xray template config: %v", err)
+	}
+
+	config["outbounds"] = outbounds
+
+	newJson, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal xray template config: %v", err)
+	}
+
+	return s.SlaveSettingService.SaveXrayConfigForSlave(slaveId, string(newJson))
+}
+
+// GetOutbounds returns all outbound rules from the template config for a slave.
+// Each outbound is returned with an "id" field set to its array index.
+func (s *OutboundService) GetOutbounds(slaveId int) ([]map[string]interface{}, error) {
+	outbounds, err := s.getTemplateOutbounds(slaveId)
+	if err != nil {
+		return nil, err
+	}
+
+	// Add pseudo-ID (array index) for frontend
+	for i := range outbounds {
+		outbounds[i]["id"] = i
+	}
+	return outbounds, nil
+}
+
+// AddOutbound adds a new outbound rule to the template config for a slave
+func (s *OutboundService) AddOutbound(slaveId int, outbound map[string]interface{}) error {
+	outbounds, err := s.getTemplateOutbounds(slaveId)
+	if err != nil {
+		return err
+	}
+
+	// Remove any frontend-generated id
+	delete(outbound, "id")
+
+	outbounds = append(outbounds, outbound)
+	logger.Infof("Added outbound rule for slave %d, total outbounds: %d", slaveId, len(outbounds))
+	return s.saveTemplateOutbounds(slaveId, outbounds)
+}
+
+// UpdateOutbound updates an outbound rule at the given index in the template config for a slave
+func (s *OutboundService) UpdateOutbound(slaveId int, index int, outbound map[string]interface{}) error {
+	outbounds, err := s.getTemplateOutbounds(slaveId)
+	if err != nil {
+		return err
+	}
+
+	if index < 0 || index >= len(outbounds) {
+		return fmt.Errorf("outbound index %d out of range (total: %d)", index, len(outbounds))
+	}
+
+	// Remove any frontend-generated id
+	delete(outbound, "id")
+
+	outbounds[index] = outbound
+	logger.Infof("Updated outbound rule at index %d for slave %d", index, slaveId)
+	return s.saveTemplateOutbounds(slaveId, outbounds)
+}
+
+// DeleteOutbound removes an outbound rule at the given index from the template config for a slave
+func (s *OutboundService) DeleteOutbound(slaveId int, index int) error {
+	outbounds, err := s.getTemplateOutbounds(slaveId)
+	if err != nil {
+		return err
+	}
+
+	if index < 0 || index >= len(outbounds) {
+		return fmt.Errorf("outbound index %d out of range (total: %d)", index, len(outbounds))
+	}
+
+	tag := ""
+	if t, ok := outbounds[index]["tag"].(string); ok {
+		tag = t
+	}
+
+	outbounds = append(outbounds[:index], outbounds[index+1:]...)
+	logger.Infof("Deleted outbound rule at index %d (tag: %s) for slave %d, remaining: %d", index, tag, slaveId, len(outbounds))
+	return s.saveTemplateOutbounds(slaveId, outbounds)
+}
+
+// GetOutboundsTrafficForSlave returns outbound traffic stats for a specific slave
+func (s *OutboundService) GetOutboundsTrafficForSlave(slaveId int) ([]*model.OutboundTraffics, error) {
+	db := database.GetDB()
+	var traffics []*model.OutboundTraffics
+
+	err := db.Model(model.OutboundTraffics{}).Where("slave_id = ?", slaveId).Find(&traffics).Error
+	if err != nil {
+		logger.Warning("Error retrieving OutboundTraffics for slave: ", err)
+		return nil, err
+	}
+
+	return traffics, nil
+}
+
+// ResetOutboundTrafficForSlave resets outbound traffic for a specific slave
+func (s *OutboundService) ResetOutboundTrafficForSlave(slaveId int, tag string) error {
+	db := database.GetDB()
+
+	query := db.Model(model.OutboundTraffics{}).Where("slave_id = ?", slaveId)
+
+	if tag == "-alltags-" {
+		// Reset all outbounds for this slave
+		query = query.Where("tag <> ?", tag)
+	} else {
+		// Reset specific outbound tag for this slave
+		query = query.Where("tag = ?", tag)
+	}
+
+	result := query.Updates(map[string]any{"up": 0, "down": 0, "total": 0})
+
+	err := result.Error
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
