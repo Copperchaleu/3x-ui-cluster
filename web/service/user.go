@@ -106,11 +106,7 @@ func (s *UserService) CheckUser(username string, password string, twoFactorCode 
 
 func (s *UserService) UpdateUser(id int, username string, password string) error {
 	db := database.GetDB()
-	hashedPassword, err := crypto.HashPasswordAsBcrypt(password)
-
-	if err != nil {
-		return err
-	}
+	hashedPassword := crypto.HashPassword(password)
 
 	twoFactorEnable, err := s.settingService.GetTwoFactorEnable()
 	if err != nil {
@@ -134,11 +130,7 @@ func (s *UserService) UpdateFirstUser(username string, password string) error {
 	} else if password == "" {
 		return errors.New("password can not be empty")
 	}
-	hashedPassword, er := crypto.HashPasswordAsBcrypt(password)
-
-	if er != nil {
-		return er
-	}
+	hashedPassword := crypto.HashPassword(password)
 
 	db := database.GetDB()
 	user := &model.User{}

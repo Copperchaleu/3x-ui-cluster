@@ -10,7 +10,6 @@ import (
 	"io/fs"
 	"os"
 	"path"
-	"slices"
 
 	"github.com/mhsanaei/3x-ui/v2/config"
 	"github.com/mhsanaei/3x-ui/v2/database/model"
@@ -81,14 +80,9 @@ func initUser() error {
 	}
 	if empty {
 		xuiLogger.Info("Creating default admin user...")
-		// Generate a random secure password
-		defaultPassword := crypto.GenerateRandomPassword(16)
-		hashedPassword, err := crypto.HashPasswordAsBcrypt(defaultPassword)
-
-		if err != nil {
-			xuiLogger.Errorf("Error hashing default password: %v", err)
-			return err
-		}
+		// Use default password "admin" for simplicity
+		defaultPassword := "admin"
+		hashedPassword := crypto.HashPassword(defaultPassword)
 
 		user := &model.User{
 			Username: defaultUsername,
@@ -100,59 +94,15 @@ func initUser() error {
 			return err
 		}
 		
-		// Log the generated password - users should change it immediately
-		xuiLogger.Warningf("========================================")
-		xuiLogger.Warningf("DEFAULT ADMIN CREDENTIALS (CHANGE IMMEDIATELY!)")
-		xuiLogger.Warningf("Username: %s", defaultUsername)
-		xuiLogger.Warningf("Password: %s", defaultPassword)
-		xuiLogger.Warningf("========================================")
 		xuiLogger.Info("Default admin user created successfully")
+		xuiLogger.Info("Username: admin, Password: admin")
 	}
 	return nil
 }
 
-// runSeeders migrates user passwords to bcrypt and records seeder execution to prevent re-running.
+// runSeeders - Disabled bcrypt migration, using simple MD5 hashing
 func runSeeders(isUsersEmpty bool) error {
-	empty, err := isTableEmpty("history_of_seeders")
-	if err != nil {
-		xuiLogger.Errorf("Error checking if seeders history table is empty: %v", err)
-		return err
-	}
-
-	if empty && isUsersEmpty {
-		hashSeeder := &model.HistoryOfSeeders{
-			SeederName: "UserPasswordHash",
-		}
-		return db.Create(hashSeeder).Error
-	} else {
-		var seedersHistory []string
-		db.Model(&model.HistoryOfSeeders{}).Pluck("seeder_name", &seedersHistory)
-
-		if !slices.Contains(seedersHistory, "UserPasswordHash") && !isUsersEmpty {
-			xuiLogger.Info("Running password hash migration seeder...")
-			var users []model.User
-			db.Find(&users)
-
-			for _, user := range users {
-				hashedPassword, err := crypto.HashPasswordAsBcrypt(user.Password)
-				if err != nil {
-					xuiLogger.Errorf("Error hashing password for user '%s': %v", user.Username, err)
-					return err
-				}
-				db.Model(&user).Update("password", hashedPassword)
-			}
-
-			hashSeeder := &model.HistoryOfSeeders{
-				SeederName: "UserPasswordHash",
-			}
-			err := db.Create(hashSeeder).Error
-			if err == nil {
-				xuiLogger.Info("Password hash migration completed successfully")
-			}
-			return err
-		}
-	}
-
+	// No seeder needed for simple password hashing
 	return nil
 }
 

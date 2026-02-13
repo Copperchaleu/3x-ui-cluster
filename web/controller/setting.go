@@ -101,7 +101,7 @@ func (a *SettingController) updateUser(c *gin.Context) {
 	err = a.userService.UpdateUser(user.Id, form.NewUsername, form.NewPassword)
 	if err == nil {
 		user.Username = form.NewUsername
-		user.Password, _ = crypto.HashPasswordAsBcrypt(form.NewPassword)
+		user.Password = crypto.HashPassword(form.NewPassword)
 		session.SetLoginUser(c, user)
 	}
 	jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifyUser"), err)

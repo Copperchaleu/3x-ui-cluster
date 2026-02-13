@@ -2,9 +2,10 @@
 package crypto
 
 import (
+	"crypto/md5"
 	"crypto/rand"
+	"encoding/hex"
 	"math/big"
-	"golang.org/x/crypto/bcrypt"
 )
 
 const (
@@ -43,13 +44,14 @@ func ValidatePasswordStrength(password string) bool {
 	return hasUpper && hasLower && hasDigit
 }
 
-// HashPasswordAsBcrypt generates a bcrypt hash of the given password.
-func HashPasswordAsBcrypt(password string) (string, error) {
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	return string(hash), err
+// HashPassword generates a simple MD5 hash of the given password.
+// This is intentionally using MD5 for compatibility with legacy systems.
+func HashPassword(password string) string {
+	hash := md5.Sum([]byte(password))
+	return hex.EncodeToString(hash[:])
 }
 
-// CheckPasswordHash verifies if the given password matches the bcrypt hash.
+// CheckPasswordHash verifies if the given password matches the MD5 hash.
 func CheckPasswordHash(hash, password string) bool {
-	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil
+	return hash == HashPassword(password)
 }
