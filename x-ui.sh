@@ -321,7 +321,7 @@ update_slave() {
         return 1
     fi
 
-    bash -c "$install_script" -- slave "${master_url}" "${slave_secret}"
+    bash -c "$install_script" -- slave "${master_url}" "${slave_secret}" --skip-cert
     if [[ $? == 0 ]]; then
         LOGI "Slave update is complete."
         if [[ $# == 0 ]]; then

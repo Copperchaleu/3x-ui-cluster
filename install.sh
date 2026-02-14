@@ -788,6 +788,7 @@ config_after_install() {
 install_x-ui_slave() {
     local master_url="$1"
     local slave_secret="$2"
+    local skip_cert="$3"  # Optional: "--skip-cert" to skip certificate configuration during updates
     
     cd ${xui_folder%/x-ui}/
     
@@ -909,9 +910,15 @@ EOF
         echo -e "${blue}Connection: ${slave_ws_url}${plain}"
         echo -e ""
         
-        # Certificate configuration for slave
-        local setup_cert=""
-        read -rp "Would you like to configure SSL certificate for this slave? (y/n): " setup_cert
+        # Certificate configuration for slave (skip during updates)
+        if [[ "$skip_cert" != "--skip-cert" ]]; then
+            local setup_cert=""
+            read -rp "Would you like to configure SSL certificate for this slave? (y/n): " setup_cert
+        else
+            echo -e "${yellow}⊙ Skipping certificate configuration (update mode)${plain}"
+            local setup_cert="n"
+        fi
+        
         if [[ "$setup_cert" == "y" || "$setup_cert" == "Y" ]]; then
             # Get server IP for IP certificate option
             local URL_lists=(
