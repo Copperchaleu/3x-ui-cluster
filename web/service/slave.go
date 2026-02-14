@@ -433,6 +433,54 @@ func (s *SlaveService) ProcessTrafficStats(slaveId int, data map[string]interfac
 				logger.Debugf("User not found in database: %s", email)
 			}
 		}
+		
+		// Sync account traffic: aggregate from all clients belonging to each account
+		accountTrafficMap := make(map[int]struct {
+			Up   int64
+			Down int64
+		})
+		
+		for _, userInterface := range users {
+			userData, ok := userInterface.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			
+			email, _ := userData["email"].(string)
+			if email == "" {
+				continue
+			}
+			
+			// Get account association
+			var clientTraffic xray.ClientTraffic
+			if err := db.Where("email = ?", email).First(&clientTraffic).Error; err == nil && clientTraffic.AccountId > 0 {
+				uplink, _ := userData["uplink"].(float64)
+				downlink, _ := userData["downlink"].(float64)
+				
+				at := accountTrafficMap[clientTraffic.AccountId]
+				at.Up += int64(uplink)
+				at.Down += int64(downlink)
+				accountTrafficMap[clientTraffic.AccountId] = at
+			}
+		}
+		
+		// Update account traffic by aggregating from all its clients
+		for accountId := range accountTrafficMap {
+			var totalUp, totalDown int64
+			err := db.Model(&xray.ClientTraffic{}).
+				Select("COALESCE(SUM(up), 0) as up, COALESCE(SUM(down), 0) as down").
+				Where("account_id = ?", accountId).
+				Row().Scan(&totalUp, &totalDown)
+			if err == nil {
+				db.Model(&model.Account{}).Where("id = ?", accountId).
+					Updates(map[string]interface{}{
+						"up":        totalUp,
+						"down":      totalDown,
+						"updatedAt": now.UnixMilli(),
+					})
+				logger.Debugf("Updated account %d traffic: up=%d, down=%d", accountId, totalUp, totalDown)
+			}
+		}
 	}
 
 

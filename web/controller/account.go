@@ -16,6 +16,7 @@ type AccountController struct {
 	BaseController
 
 	accountService service.AccountService
+	slaveService   service.SlaveService
 }
 
 // NewAccountController creates a new account controller instance.
@@ -114,6 +115,20 @@ func (a *AccountController) updateAccount(c *gin.Context) {
 		return
 	}
 
+	// Push config to all slaves that have clients associated with this account
+	affectedSlaves, err := a.accountService.GetAccountAffectedSlaves(account.Id)
+	if err == nil {
+		for _, slaveId := range affectedSlaves {
+			if pushErr := a.slaveService.PushConfig(slaveId); pushErr != nil {
+				logger.Errorf("Failed to push config to slave %d after account update: %v", slaveId, pushErr)
+			} else {
+				logger.Infof("Pushed config to slave %d after updating account %d", slaveId, account.Id)
+			}
+		}
+	} else {
+		logger.Warningf("Failed to get affected slaves for account %d: %v", account.Id, err)
+	}
+
 	jsonMsgObj(c, I18nWeb(c, "pages.accounts.toasts.updateAccount"), account, nil)
 }
 
@@ -126,10 +141,22 @@ func (a *AccountController) delAccount(c *gin.Context) {
 		return
 	}
 
+	// Get affected slaves before deletion
+	affectedSlaves, _ := a.accountService.GetAccountAffectedSlaves(id)
+
 	err = a.accountService.DelAccount(id)
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "pages.accounts.toasts.delAccount"), err)
 		return
+	}
+
+	// Push config to affected slaves after deletion
+	for _, slaveId := range affectedSlaves {
+		if pushErr := a.slaveService.PushConfig(slaveId); pushErr != nil {
+			logger.Errorf("Failed to push config to slave %d after account deletion: %v", slaveId, pushErr)
+		} else {
+			logger.Infof("Pushed config to slave %d after deleting account %d", slaveId, id)
+		}
 	}
 
 	jsonMsg(c, I18nWeb(c, "pages.accounts.toasts.delAccount"), nil)
@@ -185,6 +212,17 @@ func (a *AccountController) addClientToAccount(c *gin.Context) {
 		return
 	}
 
+	// Push config to the slave after adding client
+	inboundService := &service.InboundService{}
+	inbound, getErr := inboundService.GetInbound(data.InboundId)
+	if getErr == nil && inbound.SlaveId > 0 {
+		if pushErr := a.slaveService.PushConfig(inbound.SlaveId); pushErr != nil {
+			logger.Errorf("Failed to push config to slave %d after adding client to account: %v", inbound.SlaveId, pushErr)
+		} else {
+			logger.Infof("Pushed config to slave %d after adding client to account %d", inbound.SlaveId, accountId)
+		}
+	}
+
 	jsonMsg(c, I18nWeb(c, "pages.accounts.toasts.addClient"), nil)
 }
 
@@ -203,10 +241,22 @@ func (a *AccountController) removeClientFromAccount(c *gin.Context) {
 		return
 	}
 
+	// Get affected slaves before removal
+	affectedSlaves, _ := a.accountService.GetAccountAffectedSlaves(accountId)
+
 	err = a.accountService.RemoveClientFromAccount(accountId, clientEmail)
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "pages.accounts.toasts.removeClient"), err)
 		return
+	}
+
+	// Push config to affected slaves after removal
+	for _, slaveId := range affectedSlaves {
+		if pushErr := a.slaveService.PushConfig(slaveId); pushErr != nil {
+			logger.Errorf("Failed to push config to slave %d after removing client from account: %v", slaveId, pushErr)
+		} else {
+			logger.Infof("Pushed config to slave %d after removing client from account %d", slaveId, accountId)
+		}
 	}
 
 	jsonMsg(c, I18nWeb(c, "pages.accounts.toasts.removeClient"), nil)

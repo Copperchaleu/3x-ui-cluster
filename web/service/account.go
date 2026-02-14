@@ -204,6 +204,49 @@ func (s *AccountService) GetAccountClients(accountId int) ([]map[string]interfac
 	return result, nil
 }
 
+// GetAccountAffectedSlaves finds all slaves that have inbounds with clients associated to an account.
+// This is used to push config updates when the account is modified.
+func (s *AccountService) GetAccountAffectedSlaves(accountId int) ([]int, error) {
+	db := database.GetDB()
+
+	// Find all inbound IDs that have clients associated with this account
+	var associations []model.AccountClient
+	if err := db.Where("account_id = ?", accountId).Find(&associations).Error; err != nil {
+		return nil, err
+	}
+
+	if len(associations) == 0 {
+		return []int{}, nil
+	}
+
+	// Extract unique inbound IDs
+	inboundIds := make(map[int]bool)
+	for _, assoc := range associations {
+		inboundIds[assoc.InboundId] = true
+	}
+
+	// Get unique slave IDs from these inbounds
+	slaveIds := make(map[int]bool)
+	for inboundId := range inboundIds {
+		inbound, err := s.inboundService.GetInbound(inboundId)
+		if err != nil {
+			logger.Warningf("Failed to get inbound %d: %v", inboundId, err)
+			continue
+		}
+		if inbound.SlaveId > 0 {
+			slaveIds[inbound.SlaveId] = true
+		}
+	}
+
+	// Convert map to slice
+	result := make([]int, 0, len(slaveIds))
+	for slaveId := range slaveIds {
+		result = append(result, slaveId)
+	}
+
+	return result, nil
+}
+
 // AddClientToAccount associates a client with an account.
 // This creates the client in the inbound if it doesn't exist, or links an existing client.
 func (s *AccountService) AddClientToAccount(accountId, inboundId int, client *model.Client) error {
