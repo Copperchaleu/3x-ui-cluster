@@ -11,6 +11,7 @@ import (
 	"github.com/mhsanaei/3x-ui/v2/database"
 	"github.com/mhsanaei/3x-ui/v2/database/model"
 	"github.com/mhsanaei/3x-ui/v2/logger"
+	ws "github.com/mhsanaei/3x-ui/v2/web/websocket"
 	"github.com/mhsanaei/3x-ui/v2/xray"
 	"gorm.io/gorm"
 )
@@ -72,7 +73,14 @@ func (s *SlaveService) PushConfig(slaveId int) error {
 	// Note: We keep existing inbounds from the template (like 'api' inbound)
 	for _, inbound := range inbounds {
 		if inbound.Enable {
-			xrayInbound := inbound.GenXrayInboundConfig()
+			// Filter out disabled clients before generating config
+			filteredInbound, err := s.filterDisabledClients(inbound)
+			if err != nil {
+				logger.Warningf("Failed to filter clients for inbound %d: %v", inbound.Id, err)
+				// Use original inbound if filtering fails
+				filteredInbound = inbound
+			}
+			xrayInbound := filteredInbound.GenXrayInboundConfig()
 			xrayConfig.InboundConfigs = append(xrayConfig.InboundConfigs, *xrayInbound)
 		}
 	}
@@ -466,6 +474,90 @@ func (s *SlaveService) ProcessTrafficStats(slaveId int, data map[string]interfac
 		}
 	}
 
+	// Check and disable clients that exceeded traffic or expiry limits
+	inboundService := InboundService{}
+	accountService := AccountService{}
+	needConfigPush := false
+	
+	// 1. Check individual client limits (legacy support)
+	disabledClientCount, err := s.checkAndDisableInvalidClients(db, slaveId)
+	if err != nil {
+		logger.Warning("Error checking invalid clients:", err)
+	} else if disabledClientCount > 0 {
+		logger.Infof("Disabled %d clients on slave %d due to individual traffic/expiry limits", disabledClientCount, slaveId)
+		needConfigPush = true
+	}
+	
+	// 2. Check account-level traffic limits
+	if err := accountService.DisableClientsExceedingAccountLimit(); err != nil {
+		logger.Warning("Error checking account traffic limits:", err)
+	} else {
+		// Check if any accounts were disabled - if so, need to push config
+		var accountDisabledCount int64
+		db.Model(&model.Account{}).Where("enable = false AND updated_at > ?", now.Add(-time.Second*15).UnixMilli()).Count(&accountDisabledCount)
+		if accountDisabledCount > 0 {
+			logger.Infof("Detected %d accounts disabled due to traffic limits", accountDisabledCount)
+			needConfigPush = true
+		}
+	}
+	
+	// 3. Check account-level expiry
+	if err := accountService.DisableExpiredAccountClients(); err != nil {
+		logger.Warning("Error checking account expiry:", err)
+	} else {
+		var accountExpiredCount int64
+		db.Model(&model.Account{}).Where("enable = false AND expiry_time > 0 AND expiry_time <= ? AND updated_at > ?", now.UnixMilli(), now.Add(-time.Second*15).UnixMilli()).Count(&accountExpiredCount)
+		if accountExpiredCount > 0 {
+			logger.Infof("Detected %d accounts disabled due to expiry", accountExpiredCount)
+			needConfigPush = true
+		}
+	}
+	
+	// Push updated config to slave if any clients/accounts were disabled
+	if needConfigPush {
+		if err := s.PushConfig(slaveId); err != nil {
+			logger.Errorf("Failed to push config after disabling clients on slave %d: %v", slaveId, err)
+		} else {
+			logger.Infof("Pushed updated config to slave %d after disabling clients/accounts", slaveId)
+		}
+	}
+	
+	// Broadcast updates to frontend via WebSocket for real-time display
+	// Get updated inbounds with accumulated traffic from database
+	updatedInbounds, err := inboundService.GetAllInbounds()
+	if err != nil {
+		logger.Warning("Failed to get inbounds for websocket broadcast:", err)
+	} else if updatedInbounds != nil {
+		ws.BroadcastInbounds(updatedInbounds)
+		logger.Debugf("Broadcasted %d inbounds to frontend", len(updatedInbounds))
+	}
+	
+	// Get online clients and last online map
+	onlineClients := s.GetAllOnlineClients()
+	lastOnlineMap, err := inboundService.GetClientsLastOnline()
+	if err != nil {
+		logger.Warning("Failed to get last online map:", err)
+		lastOnlineMap = make(map[string]int64)
+	}
+	
+	// Broadcast traffic update with online status
+	trafficUpdate := map[string]any{
+		"onlineClients": onlineClients,
+		"lastOnlineMap": lastOnlineMap,
+	}
+	ws.BroadcastTraffic(trafficUpdate)
+	logger.Debugf("Broadcasted traffic update: %d online clients", len(onlineClients))
+	
+	// Get and broadcast outbounds if any
+	outboundService := OutboundService{}
+	updatedOutbounds, err := outboundService.GetOutboundsTraffic()
+	if err != nil {
+		logger.Warning("Failed to get outbounds for websocket broadcast:", err)
+	} else if updatedOutbounds != nil && len(updatedOutbounds) > 0 {
+		ws.BroadcastOutbounds(updatedOutbounds)
+		logger.Debugf("Broadcasted %d outbounds to frontend", len(updatedOutbounds))
+	}
+
 	return nil
 }
 
@@ -541,6 +633,135 @@ func (s *SlaveService) ProcessCertReport(slaveId int, data map[string]interface{
 	}
 	
 	return nil
+}
+
+// checkAndDisableInvalidClients checks for clients that exceeded limits and disables them in the database
+func (s *SlaveService) checkAndDisableInvalidClients(db *gorm.DB, slaveId int) (int64, error) {
+	now := time.Now().Unix() * 1000
+
+	// Find all clients on this slave that exceeded traffic or expiry limits
+	result := db.Model(&xray.ClientTraffic{}).
+		Where(`inbound_id IN (
+			SELECT id FROM inbounds WHERE slave_id = ?
+		) AND ((total > 0 AND up + down >= total) OR (expiry_time > 0 AND expiry_time <= ?)) AND enable = ?`,
+			slaveId, now, true).
+		Update("enable", false)
+
+	if result.Error != nil {
+		return 0, result.Error
+	}
+
+	return result.RowsAffected, nil
+}
+
+// filterDisabledClients removes disabled clients from inbound settings based on client_traffics table
+func (s *SlaveService) filterDisabledClients(inbound *model.Inbound) (*model.Inbound, error) {
+	db := database.GetDB()
+	
+	// Parse inbound settings
+	var settings map[string]interface{}
+	if err := json.Unmarshal([]byte(inbound.Settings), &settings); err != nil {
+		return inbound, err
+	}
+	
+	// Get clients array
+	clientsInterface, ok := settings["clients"]
+	if !ok {
+		// No clients in settings, return as is
+		return inbound, nil
+	}
+	
+	clients, ok := clientsInterface.([]interface{})
+	if !ok || len(clients) == 0 {
+		return inbound, nil
+	}
+	
+	// Get all client traffic with account associations
+	var clientTraffics []xray.ClientTraffic
+	if err := db.Where("inbound_id = ?", inbound.Id).Find(&clientTraffics).Error; err != nil {
+		return inbound, err
+	}
+	
+	// Get all accounts to check their enable status
+	accountIds := make([]int, 0)
+	for _, ct := range clientTraffics {
+		if ct.AccountId > 0 {
+			accountIds = append(accountIds, ct.AccountId)
+		}
+	}
+	
+	accountEnableMap := make(map[int]bool)
+	if len(accountIds) > 0 {
+		var accounts []model.Account
+		if err := db.Where("id IN ?", accountIds).Find(&accounts).Error; err == nil {
+			for _, acc := range accounts {
+				accountEnableMap[acc.Id] = acc.Enable
+			}
+		}
+	}
+	
+	// Create a map of email -> enable status
+	// Client is enabled only if BOTH client enable=true AND account enable=true (if associated)
+	enableMap := make(map[string]bool)
+	for _, ct := range clientTraffics {
+		// Check client enable status
+		clientEnabled := ct.Enable
+		
+		// If client is associated with an account, also check account status
+		if ct.AccountId > 0 {
+			accountEnabled, exists := accountEnableMap[ct.AccountId]
+			if exists && !accountEnabled {
+				// Account is disabled, so client should be disabled too
+				clientEnabled = false
+			}
+		}
+		
+		enableMap[ct.Email] = clientEnabled
+	}
+	
+	// Filter clients - only keep enabled ones
+	var filteredClients []interface{}
+	for _, clientInterface := range clients {
+		client, ok := clientInterface.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		
+		email, hasEmail := client["email"].(string)
+		if !hasEmail || email == "" {
+			// No email, keep the client (shouldn't happen normally)
+			filteredClients = append(filteredClients, clientInterface)
+			continue
+		}
+		
+		// Check if client is enabled
+		if enabled, exists := enableMap[email]; exists && !enabled {
+			// Client is disabled, skip it
+			logger.Debugf("Filtering out disabled client: %s from inbound %d", email, inbound.Id)
+			continue
+		}
+		
+		// Client is enabled or not found in traffic table, keep it
+		filteredClients = append(filteredClients, clientInterface)
+	}
+	
+	// Update settings with filtered clients
+	settings["clients"] = filteredClients
+	
+	// Marshal back to JSON
+	filteredSettings, err := json.Marshal(settings)
+	if err != nil {
+		return inbound, err
+	}
+	
+	// Create a copy of inbound with filtered settings
+	filteredInbound := *inbound
+	filteredInbound.Settings = string(filteredSettings)
+	
+	logger.Debugf("Filtered inbound %d: %d total clients, %d enabled clients", 
+		inbound.Id, len(clients), len(filteredClients))
+	
+	return &filteredInbound, nil
 }
 
 // GetAllOnlineClients returns all online clients from all connected slaves

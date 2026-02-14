@@ -45,13 +45,19 @@ func (a *XraySettingController) initRouter(g *gin.RouterGroup) {
 
 // getXraySetting retrieves the Xray configuration template, inbound tags, and outbound test URL.
 func (a *XraySettingController) getXraySetting(c *gin.Context) {
-	slaveIdStr := c.PostForm("slaveId")
-	slaveId, _ := strconv.Atoi(slaveIdStr)
-	
-	if slaveId <= 0 {
+	var req map[string]interface{}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		jsonMsg(c, I18nWeb(c, "error"), err)
+		return
+	}
+
+	// Extract slaveId from request body
+	slaveIdFloat, ok := req["slaveId"].(float64)
+	if !ok || int(slaveIdFloat) <= 0 {
 		jsonMsg(c, "请选择一个Slave节点", fmt.Errorf("slaveId is required"))
 		return
 	}
+	slaveId := int(slaveIdFloat)
 	
 	// Use SlaveSettingService to get per-slave configuration
 	xraySetting, err := a.SlaveSettingService.GetXrayConfigForSlave(slaveId)
@@ -83,16 +89,26 @@ func (a *XraySettingController) getXraySetting(c *gin.Context) {
 
 // updateSetting updates the Xray configuration settings.
 func (a *XraySettingController) updateSetting(c *gin.Context) {
-	slaveIdStr := c.PostForm("slaveId")
-	slaveId, _ := strconv.Atoi(slaveIdStr)
-	
-	if slaveId <= 0 {
+	var req map[string]interface{}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		jsonMsg(c, I18nWeb(c, "error"), err)
+		return
+	}
+
+	// Extract slaveId from request body
+	slaveIdFloat, ok := req["slaveId"].(float64)
+	if !ok || int(slaveIdFloat) <= 0 {
 		jsonMsg(c, "请选择一个Slave节点", fmt.Errorf("slaveId is required"))
 		return
 	}
+	slaveId := int(slaveIdFloat)
 	
 	// Use SlaveSettingService to save per-slave configuration
-	xraySetting := c.PostForm("xraySetting")
+	xraySetting, ok := req["xraySetting"].(string)
+	if !ok {
+		jsonMsg(c, I18nWeb(c, "error"), fmt.Errorf("xraySetting is required"))
+		return
+	}
 	
 	// Validate config first
 	if err := a.XraySettingService.CheckXrayConfig(xraySetting); err != nil {
@@ -166,14 +182,21 @@ func (a *XraySettingController) getOutboundsTraffic(c *gin.Context) {
 
 // resetOutboundsTraffic resets the traffic statistics for the specified outbound tag.
 func (a *XraySettingController) resetOutboundsTraffic(c *gin.Context) {
-	tag := c.PostForm("tag")
-	slaveIdStr := c.PostForm("slaveId")
-	slaveId, _ := strconv.Atoi(slaveIdStr)
-	
-	if slaveId <= 0 {
+	var req map[string]interface{}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		jsonMsg(c, I18nWeb(c, "error"), err)
+		return
+	}
+
+	// Extract slaveId from request body
+	slaveIdFloat, ok := req["slaveId"].(float64)
+	if !ok || int(slaveIdFloat) <= 0 {
 		jsonMsg(c, "请选择一个Slave节点", fmt.Errorf("slaveId is required"))
 		return
 	}
+	slaveId := int(slaveIdFloat)
+	
+	tag, _ := req["tag"].(string)
 	
 	err := a.OutboundService.ResetOutboundTrafficForSlave(slaveId, tag)
 	if err != nil {
