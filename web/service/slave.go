@@ -701,26 +701,32 @@ func (s *SlaveService) filterDisabledClients(inbound *model.Inbound) (*model.Inb
 	}
 	
 	// Create a map of email -> enable status
-	// Client is enabled only if BOTH client enable=true AND account enable=true (if associated)
+	// Priority: If client is associated with account, use account's enable status
+	// Otherwise, use client's own enable status
 	enableMap := make(map[string]bool)
 	for _, ct := range clientTraffics {
-		// Check client enable status
-		clientEnabled := ct.Enable
+		var finalEnabled bool
 		
-		// If client is associated with an account, also check account status
+		// If client is associated with an account, prioritize account status
 		if ct.AccountId > 0 {
-			accountEnabled, exists := accountEnableMap[ct.AccountId]
-			if exists && !accountEnabled {
-				// Account is disabled, so client should be disabled too
-				clientEnabled = false
+			if accountEnabled, exists := accountEnableMap[ct.AccountId]; exists {
+				// Use account's enable status as the authoritative source
+				finalEnabled = accountEnabled
+			} else {
+				// Account not found, fallback to client's own status
+				finalEnabled = ct.Enable
 			}
+		} else {
+			// No account association, use client's own enable status
+			finalEnabled = ct.Enable
 		}
 		
-		enableMap[ct.Email] = clientEnabled
+		enableMap[ct.Email] = finalEnabled
 	}
 	
 	// Filter clients - only keep enabled ones
-	var filteredClients []interface{}
+	// Initialize as empty slice (not nil) to ensure JSON encodes as [] instead of null
+	filteredClients := make([]interface{}, 0)
 	for _, clientInterface := range clients {
 		client, ok := clientInterface.(map[string]interface{})
 		if !ok {

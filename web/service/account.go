@@ -356,26 +356,30 @@ func (s *AccountService) CheckAccountExpiry(accountId int) (expired bool, err er
 }
 
 // ResetAccountTraffic resets the traffic usage for an account.
+// It also re-enables the account and all its associated clients.
 func (s *AccountService) ResetAccountTraffic(accountId int) error {
 	db := database.GetDB()
 
 	return db.Transaction(func(tx *gorm.DB) error {
-		// Reset account traffic
+		// Reset account traffic and re-enable the account
 		if err := tx.Model(&model.Account{}).Where("id = ?", accountId).Updates(map[string]interface{}{
-			"up":   0,
-			"down": 0,
+			"up":     0,
+			"down":   0,
+			"enable": true,
 		}).Error; err != nil {
 			return err
 		}
 
-		// Reset client traffics
+		// Reset client traffics and re-enable all associated clients
 		if err := tx.Model(&xray.ClientTraffic{}).Where("account_id = ?", accountId).Updates(map[string]interface{}{
-			"up":   0,
-			"down": 0,
+			"up":     0,
+			"down":   0,
+			"enable": true,
 		}).Error; err != nil {
 			return err
 		}
 
+		logger.Infof("Reset traffic and re-enabled account %d and all associated clients", accountId)
 		return nil
 	})
 }
