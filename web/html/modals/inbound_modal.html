@@ -113,6 +113,9 @@
                 get datepicker() {
                     return app.datepicker;
                 },
+                get themeSwitcher() {
+                    return app.themeSwitcher;
+                },
                 get delayedExpireDays() {
                     return this.client && this.client.expiryTime < 0 ? this.client.expiryTime / -86400000 : 0;
                 },
