@@ -41,3 +41,12 @@ docker-compose.override.yml
 
 # Ignore Xray-core source code
 Xray-core-main/
+
+# docker
+Dockerfile
+DockerEntrypoint.sh
+docker-compose.yml
+docker-compose.slaves.yml
+docker-slaves.sh
+Dockerfile.slave
+release.yml.backup
