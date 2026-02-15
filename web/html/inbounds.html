@@ -832,6 +832,20 @@
         for (const inbound of dbInbounds) {
           const dbInbound = new DBInbound(inbound);
           to_inbound = dbInbound.toInbound()
+
+          // Merge enable status from clientStats (database) into clients (from settings)
+          // This ensures the frontend shows the correct enable status
+          if (to_inbound.clients && dbInbound.clientStats) {
+            to_inbound.clients.forEach(client => {
+              const stats = dbInbound.clientStats.find(s => s.email === client.email);
+              if (stats !== undefined && stats !== null) {
+                // Override enable status with the value from database
+                client.enable = stats.enable;
+                console.log(`[MERGE] ${client.email}: enable=${client.enable} (from clientStats)`);
+              }
+            });
+          }
+
           this.inbounds.push(to_inbound);
           this.dbInbounds.push(dbInbound);
           if ([Protocols.VMESS, Protocols.VLESS, Protocols.TROJAN, Protocols.SHADOWSOCKS].includes(inbound.protocol)) {
