@@ -757,6 +757,20 @@
           return;
         }
 
+        // Debug: Log client enable status from API response
+        if (msg.obj && msg.obj.length > 0) {
+          console.log('[DEBUG] API Response - Checking clientStats enable field:');
+          msg.obj.forEach(inbound => {
+            if (inbound.clientStats && inbound.clientStats.length > 0) {
+              console.log(`  Inbound #${inbound.id} (${inbound.remark}):`);
+              inbound.clientStats.forEach(stats => {
+                const status = stats.enable ? '✓ ENABLED' : '✗ DISABLED';
+                console.log(`    ${status} ${stats.email} (accountId: ${stats.accountId || 'none'})`);
+              });
+            }
+          });
+        }
+
         await this.getLastOnlineMap();
         await this.getOnlineUsers();
 

@@ -487,14 +487,16 @@ func (s *AccountService) GetAccountTrafficUsage(accountId int) (up int64, down i
 // DisableClientsExceedingAccountLimit disables all clients for accounts that have exceeded their limits.
 // This should be called periodically as a background job.
 // It aggregates real-time traffic from all clients and compares against account limits.
-func (s *AccountService) DisableClientsExceedingAccountLimit() error {
+// Returns a list of affected slave IDs that need config updates.
+func (s *AccountService) DisableClientsExceedingAccountLimit() ([]int, error) {
 	db := database.GetDB()
+	affectedSlaveIds := make(map[int]bool)
 
 	// Find all active accounts with traffic limits
 	var accounts []model.Account
 	err := db.Where("total_gb > 0 AND enable = true").Find(&accounts).Error
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	for _, account := range accounts {
@@ -517,7 +519,7 @@ func (s *AccountService) DisableClientsExceedingAccountLimit() error {
 				continue
 			}
 
-			// Disable all associated clients
+			// Disable all associated clients and collect affected slave IDs
 			var associations []model.AccountClient
 			db.Where("account_id = ?", account.Id).Find(&associations)
 
@@ -525,6 +527,14 @@ func (s *AccountService) DisableClientsExceedingAccountLimit() error {
 				db.Model(&xray.ClientTraffic{}).
 					Where("email = ?", assoc.ClientEmail).
 					Update("enable", false)
+				
+				// Get the inbound to find which slave it belongs to
+				var inbound model.Inbound
+				if err := db.Where("id = ?", assoc.InboundId).First(&inbound).Error; err == nil {
+					if inbound.SlaveId > 0 {
+						affectedSlaveIds[inbound.SlaveId] = true
+					}
+				}
 			}
 
 			logger.Infof("Disabled account %s and its clients - traffic limit exceeded (used: %d bytes, limit: %d bytes)",
@@ -532,13 +542,21 @@ func (s *AccountService) DisableClientsExceedingAccountLimit() error {
 		}
 	}
 
-	return nil
+	// Convert map to slice
+	slaveIdList := make([]int, 0, len(affectedSlaveIds))
+	for slaveId := range affectedSlaveIds {
+		slaveIdList = append(slaveIdList, slaveId)
+	}
+
+	return slaveIdList, nil
 }
 
 // DisableExpiredAccountClients disables all clients for accounts that have expired.
 // This should be called periodically as a background job.
-func (s *AccountService) DisableExpiredAccountClients() error {
+// Returns a list of affected slave IDs that need config updates.
+func (s *AccountService) DisableExpiredAccountClients() ([]int, error) {
 	db := database.GetDB()
+	affectedSlaveIds := make(map[int]bool)
 
 	// Find expired accounts
 	now := time.Now().UnixMilli()
@@ -546,7 +564,7 @@ func (s *AccountService) DisableExpiredAccountClients() error {
 	err := db.Where("expiry_time > 0 AND expiry_time <= ? AND enable = true", now).Find(&expiredAccounts).Error
 
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	for _, account := range expiredAccounts {
@@ -557,7 +575,7 @@ func (s *AccountService) DisableExpiredAccountClients() error {
 			continue
 		}
 
-		// Get all client emails for this account
+		// Get all client emails for this account and collect affected slave IDs
 		var associations []model.AccountClient
 		db.Where("account_id = ?", account.Id).Find(&associations)
 
@@ -566,10 +584,24 @@ func (s *AccountService) DisableExpiredAccountClients() error {
 			db.Model(&xray.ClientTraffic{}).
 				Where("email = ?", assoc.ClientEmail).
 				Update("enable", false)
+			
+			// Get the inbound to find which slave it belongs to
+			var inbound model.Inbound
+			if err := db.Where("id = ?", assoc.InboundId).First(&inbound).Error; err == nil {
+				if inbound.SlaveId > 0 {
+					affectedSlaveIds[inbound.SlaveId] = true
+				}
+			}
 		}
 
 		logger.Infof("Disabled account %s and its clients - account expired", account.Username)
 	}
 
-	return nil
+	// Convert map to slice
+	slaveIdList := make([]int, 0, len(affectedSlaveIds))
+	for slaveId := range affectedSlaveIds {
+		slaveIdList = append(slaveIdList, slaveId)
+	}
+
+	return slaveIdList, nil
 }

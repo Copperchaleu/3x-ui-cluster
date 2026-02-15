@@ -539,28 +539,21 @@ func (s *SlaveService) ProcessTrafficStats(slaveId int, data map[string]interfac
 	}
 	
 	// 2. Check account-level traffic limits
-	if err := accountService.DisableClientsExceedingAccountLimit(); err != nil {
+	trafficLimitSlaves, err := accountService.DisableClientsExceedingAccountLimit()
+	if err != nil {
 		logger.Warning("Error checking account traffic limits:", err)
-	} else {
-		// Check if any accounts were disabled - if so, need to push config
-		var accountDisabledCount int64
-		db.Model(&model.Account{}).Where("enable = false AND updated_at > ?", now.Add(-time.Second*15).UnixMilli()).Count(&accountDisabledCount)
-		if accountDisabledCount > 0 {
-			logger.Infof("Detected %d accounts disabled due to traffic limits", accountDisabledCount)
-			needConfigPush = true
-		}
+	} else if len(trafficLimitSlaves) > 0 {
+		logger.Infof("Detected accounts disabled due to traffic limits on slaves: %v", trafficLimitSlaves)
+		needConfigPush = true
 	}
 	
 	// 3. Check account-level expiry
-	if err := accountService.DisableExpiredAccountClients(); err != nil {
+	expirySlaves, err := accountService.DisableExpiredAccountClients()
+	if err != nil {
 		logger.Warning("Error checking account expiry:", err)
-	} else {
-		var accountExpiredCount int64
-		db.Model(&model.Account{}).Where("enable = false AND expiry_time > 0 AND expiry_time <= ? AND updated_at > ?", now.UnixMilli(), now.Add(-time.Second*15).UnixMilli()).Count(&accountExpiredCount)
-		if accountExpiredCount > 0 {
-			logger.Infof("Detected %d accounts disabled due to expiry", accountExpiredCount)
-			needConfigPush = true
-		}
+	} else if len(expirySlaves) > 0 {
+		logger.Infof("Detected accounts disabled due to expiry on slaves: %v", expirySlaves)
+		needConfigPush = true
 	}
 	
 	// Push updated config to slave if any clients/accounts were disabled

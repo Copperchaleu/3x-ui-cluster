@@ -225,35 +225,15 @@ func (s *Slave) collectTrafficStats() string {
 		return ""
 	}
 	
-	logger.Info("=== DEBUG: Calling Xray GetTraffic API (reset=true) ===")
-	
 	traffics, clientTraffics, err := s.xrayAPI.GetTraffic(true)
 	if err != nil {
 		logger.Debug("Failed to get traffic stats:", err)
 		return ""
 	}
 	
-	logger.Infof("DEBUG: GetTraffic returned %d inbound/outbound entries, %d user entries", len(traffics), len(clientTraffics))
-	
-	// Log detailed traffic data from Xray API
-	if len(traffics) > 0 {
-		logger.Info("DEBUG: === Inbound/Outbound Traffic from Xray API ===")
-		for _, t := range traffics {
-			logger.Infof("DEBUG:   Tag=%s, IsInbound=%v, Up=%d bytes, Down=%d bytes", 
-				t.Tag, t.IsInbound, t.Up, t.Down)
-		}
-	}
-	
-	if len(clientTraffics) > 0 {
-		logger.Info("DEBUG: === User Traffic from Xray API ===")
-		for _, ct := range clientTraffics {
-			logger.Infof("DEBUG:   Email=%s, Up=%d bytes, Down=%d bytes", 
-				ct.Email, ct.Up, ct.Down)
-		}
-	}
+	logger.Debugf("collectTrafficStats: Got %d inbound/outbound entries, %d user entries", len(traffics), len(clientTraffics))
 	
 	if len(traffics) == 0 && len(clientTraffics) == 0 {
-		logger.Info("DEBUG: Xray API returned ZERO traffic entries")
 		return ""
 	}
 	
