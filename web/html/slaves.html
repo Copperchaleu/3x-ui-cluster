@@ -39,18 +39,13 @@
                         </template>
                         <template slot="systemStats" slot-scope="text, record">
                             <div v-if="text" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                                <div v-if="record.slaveIp" style="font-weight: bold; white-space: nowrap;">
-                                    <a-icon type="cloud-server"></a-icon> [[ record.slaveIp ]]
-                                </div>
-                                <a-divider type="vertical"
-                                    v-if="record.slaveIp && (record.cpu || record.mem || record.disk)"></a-divider>
                                 <a-tag v-if="record.cpu !== undefined" color="blue" style="margin: 0;">CPU: [[
                                     record.cpu ]]</a-tag>
                                 <a-tag v-if="record.mem !== undefined" color="purple" style="margin: 0;">MEM: [[
                                     record.mem ]]</a-tag>
                                 <a-tag v-if="record.disk !== undefined" color="orange" style="margin: 0;">DISK: [[
                                     record.disk ]]</a-tag>
-                                <span v-if="!record.cpu && !record.mem && !record.disk && !record.slaveIp">[[ text
+                                <span v-if="!record.cpu && !record.mem && !record.disk">[[ text
                                     ]]</span>
                             </div>
                             <span v-else>-</span>
@@ -115,7 +110,7 @@
                 { title: '{{ i18n "pages.slaves.name" }}', dataIndex: 'name', key: 'name' },
                 { title: '{{ i18n "pages.slaves.slaveIP" }}', dataIndex: 'slaveIp', scopedSlots: { customRender: 'slaveIp' }, width: '180px' },
                 { title: '{{ i18n "pages.slaves.status" }}', dataIndex: 'status', scopedSlots: { customRender: 'status' }, width: '100px' },
-                { title: '{{ i18n "pages.slaves.version" }}', dataIndex: 'version', key: 'version', width: '120px' },
+                { title: '{{ i18n "pages.slaves.version" }}', dataIndex: 'version', key: 'version', width: '220px' },
                 { title: '{{ i18n "pages.slaves.systemStats" }}', dataIndex: 'systemStats', scopedSlots: { customRender: 'systemStats' }, width: '600px' },
                 { title: '{{ i18n "pages.slaves.traffic" }} (↑/↓)', key: 'traffic', scopedSlots: { customRender: 'traffic' }, width: '180px' },
                 { title: '{{ i18n "pages.slaves.actions" }}', key: 'action', scopedSlots: { customRender: 'action' }, width: '450px' }

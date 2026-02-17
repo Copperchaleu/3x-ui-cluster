@@ -12,6 +12,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/mhsanaei/3x-ui/v2/config"
+
 	"github.com/gorilla/websocket"
 	"github.com/mhsanaei/3x-ui/v2/logger"
 	"github.com/mhsanaei/3x-ui/v2/xray"
@@ -188,7 +190,16 @@ func (s *Slave) collectStats() string {
 	}
 
 	ip := s.getPublicIP()
-	return fmt.Sprintf(`{"cpu": %.2f, "mem": %.2f, "address": "%s"}`, cpuVal, v.UsedPercent, ip)
+	
+	// Get versions
+	xrayVersion := "Unknown"
+	if s.process != nil {
+		xrayVersion = s.process.GetVersion()
+	}
+	uiVersion := config.GetVersion()
+	
+	return fmt.Sprintf(`{"cpu": %.2f, "mem": %.2f, "address": "%s", "xrayVersion": "%s", "uiVersion": "%s"}`, 
+		cpuVal, v.UsedPercent, ip, xrayVersion, uiVersion)
 }
 
 // getPublicIP fetches the public IP address of this slave

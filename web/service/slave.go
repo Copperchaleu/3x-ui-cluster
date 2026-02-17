@@ -367,6 +367,16 @@ func (s *SlaveService) UpdateSlaveStatus(id int, status string, stats string) er
             if address, ok := statsData["address"].(string); ok && address != "" {
                 updates["address"] = address
             }
+            
+            // Extract versions if present
+            xrayVersion, _ := statsData["xrayVersion"].(string)
+            uiVersion, _ := statsData["uiVersion"].(string)
+            
+            if xrayVersion != "" || uiVersion != "" {
+                if xrayVersion == "" { xrayVersion = "Unknown" }
+                if uiVersion == "" { uiVersion = "Unknown" }
+                updates["version"] = fmt.Sprintf("Xray: %s / 3x-ui: %s", xrayVersion, uiVersion)
+            }
         }
     }
     
