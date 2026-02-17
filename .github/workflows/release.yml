@@ -195,7 +195,7 @@
 #           cd x-ui\bin
           
 #           # Download Xray for Windows
-#           $Xray_URL = "https://github.com/XTLS/Xray-core/releases/download/latest/"
+#           $Xray_URL = "https://github.com/XTLS/Xray-core/releases/latest/download/"
 #           Invoke-WebRequest -Uri "${Xray_URL}Xray-windows-64.zip" -OutFile "Xray-windows-64.zip"
 #           Expand-Archive -Path "Xray-windows-64.zip" -DestinationPath .
 #           Remove-Item "Xray-windows-64.zip"

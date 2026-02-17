@@ -72,6 +72,17 @@ func GetBinFolderPath() string {
 func getBaseDir() string {
 	exePath, err := os.Executable()
 	if err != nil {
+		// Fallback to os.Args[0] if os.Executable fails (e.g. /proc missing, binary deleted)
+		if len(os.Args) > 0 {
+			// If started with absolute path (common in systemd), usage that
+			if filepath.IsAbs(os.Args[0]) {
+				return filepath.Dir(os.Args[0])
+			}
+			// If relative, try to resolve absolute path
+			if abs, err := filepath.Abs(os.Args[0]); err == nil {
+				return filepath.Dir(abs)
+			}
+		}
 		return "."
 	}
 	exeDir := filepath.Dir(exePath)
