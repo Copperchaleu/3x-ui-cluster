@@ -172,8 +172,16 @@
         <a-modal title='{{ i18n "pages.accounts.addClient" }}' :visible="addClientModalVisible" @ok="addClientToAccount"
           @cancel="addClientModalVisible = false" ok-text='{{ i18n "confirm" }}' cancel-text='{{ i18n "cancel" }}'>
           <a-form-model :label-col="{ span: 6 }" :wrapper-col="{ span: 18 }">
+            <a-form-model-item label='Slave'>
+              <a-select v-model="newClient.slaveId" @change="onSlaveChange" style="width: 100%">
+                <a-select-option v-for="slave in slaves" :key="slave.id" :value="slave.id">
+                  [[ slave.name ]]
+                </a-select-option>
+              </a-select>
+            </a-form-model-item>
             <a-form-model-item label='{{ i18n "pages.accounts.selectInbound" }}'>
-              <a-select v-model="newClient.inboundId" @change="onInboundChange" style="width: 100%">
+              <a-select v-model="newClient.inboundId" @change="onInboundChange" :disabled="!newClient.slaveId"
+                style="width: 100%">
                 <a-select-option v-for="inbound in availableInbounds" :key="inbound.id" :value="inbound.id">
                   [[ inbound.tag ]] - [[ inbound.remark ]]
                 </a-select-option>
@@ -227,6 +235,7 @@
       accountLinks: [],
       accountLinksLoading: false,
       remarkModel: '-ieo',
+      slaves: [],
       availableInbounds: [],
       inboundClients: [],
       loadingClients: false,
@@ -294,7 +303,7 @@
     },
     mounted() {
       this.fetchAccounts();
-      this.fetchInbounds();
+      this.fetchSlaves();
       this.fetchRemarkModel();
     },
     methods: {
@@ -309,10 +318,20 @@
           this.loading = false;
         }
       },
-      async fetchInbounds() {
-        const msg = await HttpUtil.get('/panel/api/inbounds/list');
+      async fetchInbounds(slaveId) {
+        if (!slaveId) {
+          this.availableInbounds = [];
+          return;
+        }
+        const msg = await HttpUtil.get(`/panel/api/inbounds/list?slaveId=${slaveId}`);
         if (msg.success) {
           this.availableInbounds = msg.obj;
+        }
+      },
+      async fetchSlaves() {
+        const msg = await HttpUtil.get('/panel/api/slave/list');
+        if (msg.success) {
+          this.slaves = msg.obj;
         }
       },
       getEmptyAccount() {
@@ -494,9 +513,20 @@
         }
       },
       showAddClientModal() {
-        this.newClient = { inboundId: null, clientEmail: '' };
+        this.newClient = { slaveId: null, inboundId: null, clientEmail: '' };
+        this.availableInbounds = [];
         this.inboundClients = [];
         this.addClientModalVisible = true;
+      },
+      async onSlaveChange(slaveId) {
+        this.newClient.inboundId = null;
+        this.newClient.clientEmail = '';
+        this.inboundClients = [];
+        if (!slaveId) {
+          this.availableInbounds = [];
+          return;
+        }
+        await this.fetchInbounds(slaveId);
       },
       async onInboundChange(inboundId) {
         if (!inboundId) {

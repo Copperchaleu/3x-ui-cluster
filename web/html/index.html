@@ -365,7 +365,8 @@
         <a-checkbox v-model="logModal.syslog" @change="openLogs()">SysLog</a-checkbox>
       </a-form-item>
       <a-form-item style="float: right;">
-        <a-button type="primary" icon="download" @click="FileManager.downloadTextFile(logModal.logs?.join('\n'), 'x-ui.log')"></a-button>
+        <a-button type="primary" icon="download"
+          @click="FileManager.downloadTextFile(logModal.logs?.join('\n'), 'x-ui.log')"></a-button>
       </a-form-item>
     </a-form>
     <div class="ant-input log-container" v-html="logModal.formattedLogs"></div>
@@ -443,7 +444,8 @@
       <sparkline :data="cpuHistoryLong" :labels="cpuHistoryLabels" :vb-width="840" :height="220"
         :stroke="status.cpu.color" :stroke-width="2.2" :show-grid="true" :show-axes="true" :tick-count-x="5"
         :max-points="cpuHistoryLong.length" :fill-opacity="0.18" :marker-radius="3.2" :show-tooltip="true" />
-      <div style="margin-top:4px;font-size:11px;opacity:0.65">Timeframe: [[ cpuHistoryModal.bucket ]] sec per point (total [[ cpuHistoryLong.length ]] points)</div>
+      <div style="margin-top:4px;font-size:11px;opacity:0.65">Timeframe: [[ cpuHistoryModal.bucket ]] sec per point
+        (total [[ cpuHistoryLong.length ]] points)</div>
     </div>
   </a-modal>
 </a-layout>
@@ -794,20 +796,20 @@
   };
 
   const xraylogModal = {
-      visible: false,
-      logs: [],
-      rows: 20,
-      showDirect: true,
-      showBlocked: true,
-      showProxy: true,
-      loading: false,
-      show(logs) {
-        this.visible = true;
-        this.logs = logs;
-        this.formattedLogs = this.logs?.length > 0 ? this.formatLogs(this.logs) : "No Record...";
-      },
-      formatLogs(logs) {
-        let formattedLogs = `
+    visible: false,
+    logs: [],
+    rows: 20,
+    showDirect: true,
+    showBlocked: true,
+    showProxy: true,
+    loading: false,
+    show(logs) {
+      this.visible = true;
+      this.logs = logs;
+      this.formattedLogs = this.logs?.length > 0 ? this.formatLogs(this.logs) : "No Record...";
+    },
+    formatLogs(logs) {
+      let formattedLogs = `
 <style>
   table {
     border-collapse: collapse;
@@ -830,21 +832,21 @@
     </tr>
 `;
 
-        logs.reverse().forEach((log, index) => {
-          let outboundColor = '';
-          if (log.Event === 1) {
-            outboundColor = ' style="color: #e04141;"'; //red for blocked
-          }
-          else if (log.Event === 2) {
-            outboundColor = ' style="color: #3c89e8;"'; //blue for proxies
-          }
+      logs.reverse().forEach((log, index) => {
+        let outboundColor = '';
+        if (log.Event === 1) {
+          outboundColor = ' style="color: #e04141;"'; //red for blocked
+        }
+        else if (log.Event === 2) {
+          outboundColor = ' style="color: #3c89e8;"'; //blue for proxies
+        }
 
-          let text = ``;
-          if (log.Email !== "") {
-            text = `<td>${log.Email}</td>`;
-          }
+        let text = ``;
+        if (log.Email !== "") {
+          text = `<td>${log.Email}</td>`;
+        }
 
-          formattedLogs += `
+        formattedLogs += `
 <tr ${outboundColor}>
     <td><b>${IntlUtil.formatDate(log.DateTime)}</b></td>
     <td>${log.FromAddress}</td>
@@ -854,14 +856,14 @@
     ${text}
 </tr>
 `;
-        });
+      });
 
-        return formattedLogs += "</table>";
-      },
-      hide() {
-        this.visible = false;
-      },
-    };
+      return formattedLogs += "</table>";
+    },
+    hide() {
+      this.visible = false;
+    },
+  };
   const backupModal = {
     visible: false,
     show() {
@@ -883,10 +885,10 @@
         spinning: false
       },
       status: new Status(),
-  cpuHistory: [], // small live widget history
-  cpuHistoryLong: [], // aggregated points from backend
-  cpuHistoryLabels: [],
-  cpuHistoryModal: { visible: false, bucket: 2 },
+      cpuHistory: [], // small live widget history
+      cpuHistoryLong: [], // aggregated points from backend
+      cpuHistoryLabels: [],
+      cpuHistoryModal: { visible: false, bucket: 2 },
       versionModal,
       logModal,
       xraylogModal,
@@ -942,16 +944,16 @@
             const labels = []
             for (const p of msg.obj) {
               const d = new Date(p.t * 1000)
-              const hh = String(d.getHours()).padStart(2,'0')
-              const mm = String(d.getMinutes()).padStart(2,'0')
-              const ss = String(d.getSeconds()).padStart(2,'0')
-              labels.push(bucket>=60 ? `${hh}:${mm}` : `${hh}:${mm}:${ss}`)
+              const hh = String(d.getHours()).padStart(2, '0')
+              const mm = String(d.getMinutes()).padStart(2, '0')
+              const ss = String(d.getSeconds()).padStart(2, '0')
+              labels.push(bucket >= 60 ? `${hh}:${mm}` : `${hh}:${mm}:${ss}`)
               vals.push(Math.max(0, Math.min(100, p.cpu)))
             }
             this.cpuHistoryLabels = labels
             this.cpuHistoryLong = vals
           }
-        } catch(e) {
+        } catch (e) {
           console.error('Failed to fetch bucketed cpu history', e)
         }
       },
@@ -1133,7 +1135,7 @@
       // Setup WebSocket for real-time updates
       if (window.wsClient) {
         window.wsClient.connect();
-        
+
         // Listen for status updates
         window.wsClient.on('status', (payload) => {
           this.setStatus(payload);
