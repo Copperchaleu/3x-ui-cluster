@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"time"
-
+	"strings"
 	"github.com/mhsanaei/3x-ui/v2/database/model"
 	"github.com/mhsanaei/3x-ui/v2/logger"
 	"github.com/mhsanaei/3x-ui/v2/util/common"
@@ -149,11 +149,22 @@ func (a *InboundController) addInbound(c *gin.Context) {
 	
 	user := session.GetLoginUser(c)
 	inbound.UserId = user.Id
-	if inbound.Listen == "" || inbound.Listen == "0.0.0.0" || inbound.Listen == "::" || inbound.Listen == "::0" {
-		inbound.Tag = fmt.Sprintf("inbound-%v", inbound.Port)
-	} else {
-		inbound.Tag = fmt.Sprintf("inbound-%v:%v", inbound.Listen, inbound.Port)
+
+	// Generate tag with format inbound-<SlaveName>-<Protocol>-<Port>
+	slaveName := "master"
+	if inbound.SlaveId > 0 {
+		slave, err := a.slaveService.GetSlave(inbound.SlaveId)
+		if err == nil && slave != nil {
+			slaveName = slave.Name
+		} else {
+			logger.Warningf("Failed to get slave name for id %d, using 'unknown'", inbound.SlaveId)
+			slaveName = "unknown"
+		}
 	}
+	// Sanitize slave name (replace spaces with dashes)
+	slaveName = strings.ReplaceAll(slaveName, " ", "-")
+	
+	inbound.Tag = fmt.Sprintf("inbound-%s-%s-%d", slaveName, inbound.Protocol, inbound.Port)
 
 	inbound, needRestart, err := a.inboundService.AddInbound(inbound)
 	if err != nil {
@@ -418,11 +429,22 @@ func (a *InboundController) importInbound(c *gin.Context) {
 	user := session.GetLoginUser(c)
 	inbound.Id = 0
 	inbound.UserId = user.Id
-	if inbound.Listen == "" || inbound.Listen == "0.0.0.0" || inbound.Listen == "::" || inbound.Listen == "::0" {
-		inbound.Tag = fmt.Sprintf("inbound-%v", inbound.Port)
-	} else {
-		inbound.Tag = fmt.Sprintf("inbound-%v:%v", inbound.Listen, inbound.Port)
+	
+	// Generate tag with format inbound-<SlaveName>-<Protocol>-<Port>
+	slaveName := "master"
+	if inbound.SlaveId > 0 {
+		slave, err := a.slaveService.GetSlave(inbound.SlaveId)
+		if err == nil && slave != nil {
+			slaveName = slave.Name
+		} else {
+			logger.Warningf("Failed to get slave name for id %d, using 'unknown'", inbound.SlaveId)
+			slaveName = "unknown"
+		}
 	}
+	// Sanitize slave name (replace spaces with dashes)
+	slaveName = strings.ReplaceAll(slaveName, " ", "-")
+	
+	inbound.Tag = fmt.Sprintf("inbound-%s-%s-%d", slaveName, inbound.Protocol, inbound.Port)
 
 	for index := range inbound.ClientStats {
 		inbound.ClientStats[index].Id = 0

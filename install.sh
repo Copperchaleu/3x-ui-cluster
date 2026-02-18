@@ -868,16 +868,41 @@ install_x-ui_slave() {
     echo "slave" > /etc/x-ui/.slave
     
     # Create slave systemd service
+    # Convert WebSocket URL for slave
+    slave_ws_url=$(echo "$master_url" | sed 's|^http://|ws://|' | sed 's|^https://|wss://|')
+    # Remove trailing slash if present, then add the path
+    slave_ws_url="${slave_ws_url%/}/panel/api/slave/connect"
+
+    # Create slave systemd/openrc service
     if [[ $release == "alpine" ]]; then
-        echo -e "${red}Alpine Linux is not supported for slave mode yet${plain}"
-        exit 1
+        echo -e "${green}Creating x-ui OpenRC service...${plain}"
+        cat > /etc/init.d/x-ui <<EOF
+#!/sbin/openrc-run
+
+command="${xui_folder}/x-ui"
+command_args="slave ${slave_ws_url} ${slave_secret}"
+command_background=true
+pidfile="/run/x-ui.pid"
+name="x-ui"
+description="x-ui Slave Service"
+output_log="/var/log/x-ui/x-ui.log"
+error_log="/var/log/x-ui/x-ui.error.log"
+
+depend() {
+    need net
+}
+
+start_pre() {
+    cd ${xui_folder}
+}
+EOF
+        chmod +x /etc/init.d/x-ui
+        rc-update add x-ui
+        rc-service x-ui start
+        
+        echo -e "${green}x-ui OpenRC service installed and started${plain}"
     else
         echo -e "${green}Creating x-ui-slave systemd service...${plain}"
-        
-        # Convert WebSocket URL for slave
-        slave_ws_url=$(echo "$master_url" | sed 's|^http://|ws://|' | sed 's|^https://|wss://|')
-        # Remove trailing slash if present, then add the path
-        slave_ws_url="${slave_ws_url%/}/panel/api/slave/connect"
         
         cat > ${xui_service}/x-ui-slave.service <<EOF
 [Unit]
@@ -943,13 +968,21 @@ EOF
             echo -e "${green}═══════════════════════════════════════════${plain}"
             
             # Temporarily stop slave to free port 80 for certificate issuance
-            systemctl stop x-ui-slave
+            if [[ $release == "alpine" ]]; then
+                rc-service x-ui stop
+            else
+                systemctl stop x-ui-slave
+            fi
             
             # Use existing SSL setup function (domain or IP)
             prompt_and_setup_ssl "" "" "${server_ip}"
             
             # Restart slave after certificate setup
-            systemctl start x-ui-slave
+            if [[ $release == "alpine" ]]; then
+                rc-service x-ui start
+            else
+                systemctl start x-ui-slave
+            fi
             
             # Display certificate paths for master configuration
             echo ""
@@ -975,7 +1008,18 @@ EOF
         fi
         
         echo ""
-        echo -e "┌───────────────────────────────────────────────────────┐
+        if [[ $release == "alpine" ]]; then
+            echo -e "┌───────────────────────────────────────────────────────┐
+│  ${blue}x-ui control commands:${plain}                               │
+│                                                       │
+│  ${blue}rc-service x-ui start${plain}        - Start slave          │
+│  ${blue}rc-service x-ui stop${plain}         - Stop slave           │
+│  ${blue}rc-service x-ui restart${plain}      - Restart slave        │
+│  ${blue}rc-service x-ui status${plain}       - Check status         │
+│  ${blue}tail -f /var/log/x-ui/x-ui.log${plain} - View logs          │
+└───────────────────────────────────────────────────────┘"
+        else
+            echo -e "┌───────────────────────────────────────────────────────┐
 │  ${blue}x-ui slave control commands:${plain}                         │
 │                                                       │
 │  ${blue}systemctl start x-ui-slave${plain}   - Start slave          │
@@ -984,6 +1028,7 @@ EOF
 │  ${blue}systemctl status x-ui-slave${plain}  - Check status         │
 │  ${blue}journalctl -u x-ui-slave -f${plain}  - View logs            │
 └───────────────────────────────────────────────────────┘"
+        fi
     fi
 }
 

@@ -556,11 +556,29 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 	oldInbound.Settings = inbound.Settings
 	oldInbound.StreamSettings = inbound.StreamSettings
 	oldInbound.Sniffing = inbound.Sniffing
-	if inbound.Listen == "" || inbound.Listen == "0.0.0.0" || inbound.Listen == "::" || inbound.Listen == "::0" {
-		oldInbound.Tag = fmt.Sprintf("inbound-%v", inbound.Port)
-	} else {
-		oldInbound.Tag = fmt.Sprintf("inbound-%v:%v", inbound.Listen, inbound.Port)
+	
+	// Generate tag with format inbound-<SlaveName>-<Protocol>-<Port>
+	slaveName := "master"
+	if inbound.SlaveId > 0 {
+		var slave model.Slave
+		if err := db.First(&slave, inbound.SlaveId).Error; err == nil {
+			slaveName = slave.Name
+		} else {
+			logger.Warningf("Failed to get slave name for id %d during update, using 'unknown'", inbound.SlaveId)
+			slaveName = "unknown"
+		}
 	}
+	// Sanitize slave name (replace spaces with dashes)
+	slaveName = strings.ReplaceAll(slaveName, " ", "-")
+	
+	oldInbound.Tag = fmt.Sprintf("inbound-%s-%s-%d", slaveName, inbound.Protocol, inbound.Port)
+	
+	// Original logic:
+	// if inbound.Listen == "" || inbound.Listen == "0.0.0.0" || inbound.Listen == "::" || inbound.Listen == "::0" {
+	// 	oldInbound.Tag = fmt.Sprintf("inbound-%v", inbound.Port)
+	// } else {
+	// 	oldInbound.Tag = fmt.Sprintf("inbound-%v:%v", inbound.Listen, inbound.Port)
+	// }
 
 	needRestart := false
 	if p != nil {
