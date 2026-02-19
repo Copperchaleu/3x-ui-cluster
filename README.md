@@ -10,6 +10,7 @@
 [![Release](https://img.shields.io/github/v/release/Copperchaleu/3x-ui-cluster.svg)](https://github.com/Copperchaleu/3x-ui-cluster/releases)
 [![Build](https://img.shields.io/github/actions/workflow/status/Copperchaleu/3x-ui-cluster/release.yml.svg)](https://github.com/Copperchaleu/3x-ui-cluster/actions)
 [![License](https://img.shields.io/badge/license-GPL%20V3-blue.svg?longCache=true)](https://www.gnu.org/licenses/gpl-3.0.en.html)
+[![Telegram](https://img.shields.io/badge/Telegram-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white)](https://t.me/xuicluster)
 
 
 
