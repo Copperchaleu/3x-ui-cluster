@@ -113,7 +113,7 @@ func (s *InboundService) GetInboundsByTrafficReset(period string) ([]*model.Inbo
 	return inbounds, nil
 }
 
-func (s *InboundService) checkPortExist(listen string, port int, ignoreId int) (bool, error) {
+func (s *InboundService) checkPortExist(listen string, port int, ignoreId int, slaveId int) (bool, error) {
 	db := database.GetDB()
 	if listen == "" || listen == "0.0.0.0" || listen == "::" || listen == "::0" {
 		db = db.Model(model.Inbound{}).Where("port = ?", port)
@@ -135,6 +135,9 @@ func (s *InboundService) checkPortExist(listen string, port int, ignoreId int) (
 	if ignoreId > 0 {
 		db = db.Where("id != ?", ignoreId)
 	}
+	// Also filter by slave_id so we only check collisions on the SAME slave
+	db = db.Where("slave_id = ?", slaveId)
+
 	var count int64
 	err := db.Count(&count).Error
 	if err != nil {
@@ -230,7 +233,7 @@ func (s *InboundService) checkEmailExistForInbound(inbound *model.Inbound) (stri
 // then saves the inbound to the database and optionally adds it to the running Xray instance.
 // Returns the created inbound, whether Xray needs restart, and any error.
 func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, bool, error) {
-	exist, err := s.checkPortExist(inbound.Listen, inbound.Port, 0)
+	exist, err := s.checkPortExist(inbound.Listen, inbound.Port, 0, inbound.SlaveId)
 	if err != nil {
 		return inbound, false, err
 	}
@@ -449,7 +452,7 @@ func (s *InboundService) GetInboundClients(inboundId int) ([]string, error) {
 func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, bool, error) {
 	logger.Infof("Updating inbound: id=%d, tag=%s, protocol=%s, port=%d", 
 		inbound.Id, inbound.Tag, inbound.Protocol, inbound.Port)
-	exist, err := s.checkPortExist(inbound.Listen, inbound.Port, inbound.Id)
+	exist, err := s.checkPortExist(inbound.Listen, inbound.Port, inbound.Id, inbound.SlaveId)
 	if err != nil {
 		logger.Errorf("Failed to check port existence for inbound id=%d: %v", inbound.Id, err)
 		return inbound, false, err

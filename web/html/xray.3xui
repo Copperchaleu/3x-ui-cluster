@@ -1032,13 +1032,12 @@
       editRule(index) {
         ruleModal.show({
           title: '{{ i18n "pages.xray.rules.edit"}} ' + (index + 1),
-          rule: app.templateSettings.routing.rules[index],
+          rule: this.templateSettings.routing.rules[index],
           confirm: (rule) => {
             ruleModal.loading();
-            if (JSON.stringify(rule).length > 3) {
-              this.templateSettings.routing.rules[index] = rule;
-              this.routingRuleSettings = JSON.stringify(this.templateSettings.routing.rules);
-            }
+            const newTemplateSettings = JSON.parse(JSON.stringify(this.templateSettings));
+            newTemplateSettings.routing.rules[index] = rule;
+            this.templateSettings = newTemplateSettings;
             ruleModal.close();
           },
           isEdit: true

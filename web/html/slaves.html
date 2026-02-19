@@ -107,13 +107,13 @@
             loading: false,
             slaves: [],
             columns: [
-                { title: '{{ i18n "pages.slaves.name" }}', dataIndex: 'name', key: 'name' },
+                { title: '{{ i18n "pages.slaves.name" }}', dataIndex: 'name', key: 'name', width: '200px' },
                 { title: '{{ i18n "pages.slaves.slaveIP" }}', dataIndex: 'slaveIp', scopedSlots: { customRender: 'slaveIp' }, width: '180px' },
                 { title: '{{ i18n "pages.slaves.status" }}', dataIndex: 'status', scopedSlots: { customRender: 'status' }, width: '100px' },
-                { title: '{{ i18n "pages.slaves.version" }}', dataIndex: 'version', key: 'version', width: '220px' },
-                { title: '{{ i18n "pages.slaves.systemStats" }}', dataIndex: 'systemStats', scopedSlots: { customRender: 'systemStats' }, width: '600px' },
+                { title: '{{ i18n "pages.slaves.version" }}', dataIndex: 'version', key: 'version', width: '200px' },
+                { title: '{{ i18n "pages.slaves.systemStats" }}', dataIndex: 'systemStats', scopedSlots: { customRender: 'systemStats' } },
                 { title: '{{ i18n "pages.slaves.traffic" }} (↑/↓)', key: 'traffic', scopedSlots: { customRender: 'traffic' }, width: '180px' },
-                { title: '{{ i18n "pages.slaves.actions" }}', key: 'action', scopedSlots: { customRender: 'action' }, width: '450px' }
+                { title: '{{ i18n "pages.slaves.actions" }}', key: 'action', scopedSlots: { customRender: 'action' }, width: '300px' }
             ],
             addSlaveModal: {
                 visible: false,
