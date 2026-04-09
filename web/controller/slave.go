@@ -109,8 +109,7 @@ func (s *SlaveController) delSlave(c *gin.Context) {
     
     // DeleteSlave now handles all cascade deletions:
     // - inbounds, clients, traffics, IPs, account associations
-    // - slave certs, outbound traffics, xray outbounds/routing rules
-    // - slave settings
+    // - slave certs, outbound traffics, slave settings
     if err := s.slaveService.DeleteSlave(id); err != nil {
          logger.Errorf("Failed to delete slave %d: %v", id, err)
          c.JSON(http.StatusInternalServerError, gin.H{"success": false, "msg": err.Error()})

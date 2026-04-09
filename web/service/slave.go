@@ -312,35 +312,21 @@ func (s *SlaveService) DeleteSlave(id int) error {
 			return err
 		}
 		
-		// 6. Delete XrayOutbounds (if stored in database)
-		logger.Infof("Deleting xray outbounds for slave %d", id)
-		if err := tx.Where("slave_id = ?", id).Delete(&model.XrayOutbound{}).Error; err != nil {
-			logger.Errorf("Failed to delete xray outbounds for slave %d: %v", id, err)
-			return err
-		}
-		
-		// 7. Delete XrayRoutingRules
-		logger.Infof("Deleting xray routing rules for slave %d", id)
-		if err := tx.Where("slave_id = ?", id).Delete(&model.XrayRoutingRule{}).Error; err != nil {
-			logger.Errorf("Failed to delete xray routing rules for slave %d: %v", id, err)
-			return err
-		}
-		
-		// 8. Delete slave settings
+		// 6. Delete slave settings
 		logger.Infof("Deleting settings for slave %d", id)
 		if err := tx.Where("slave_id = ?", id).Delete(&model.SlaveSetting{}).Error; err != nil {
 			logger.Errorf("Failed to delete settings for slave %d: %v", id, err)
 			return err
 		}
 		
-		// 9. Finally, delete the slave itself
+		// 7. Finally, delete the slave itself
 		logger.Infof("Deleting slave record %d", id)
 		if err := tx.Delete(&model.Slave{}, id).Error; err != nil {
 			logger.Errorf("Failed to delete slave %d: %v", id, err)
 			return err
 		}
 		
-		// 10. Remove websocket connection (outside transaction)
+		// 8. Remove websocket connection (outside transaction)
 		// This is safe to do even if transaction fails
 		go func() {
 			s.RemoveSlaveConn(id)
@@ -859,6 +845,24 @@ func (s *SlaveService) filterDisabledClients(inbound *model.Inbound) (*model.Inb
 	// Update settings with filtered clients
 	settings["clients"] = filteredClients
 	
+	// For Shadowsocks inbounds: ensure per-client "method" is populated.
+	// The frontend may store an empty "method" for each client (especially for
+	// legacy ciphers like aes-256-gcm). Xray's config file parser requires a
+	// valid cipher method on every client entry, so we copy the top-level
+	// "method" into any client that has an empty or missing one.
+	if string(inbound.Protocol) == "shadowsocks" {
+		if topMethod, _ := settings["method"].(string); topMethod != "" {
+			for _, clientInterface := range filteredClients {
+				if client, ok := clientInterface.(map[string]interface{}); ok {
+					clientMethod, _ := client["method"].(string)
+					if clientMethod == "" {
+						client["method"] = topMethod
+					}
+				}
+			}
+		}
+	}
+
 	// Marshal back to JSON
 	filteredSettings, err := json.Marshal(settings)
 	if err != nil {

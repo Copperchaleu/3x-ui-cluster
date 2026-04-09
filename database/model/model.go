@@ -2,6 +2,7 @@
 package model
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/mhsanaei/3x-ui/v2/util/json_util"
@@ -142,15 +143,68 @@ func (i *Inbound) GenXrayInboundConfig() *xray.InboundConfig {
 		listen = "0.0.0.0"
 	}
 	listen = fmt.Sprintf("\"%v\"", listen)
+
+	settings := i.Settings
+
+	// For Shadowsocks inbounds: ensure per-client "method" is populated.
+	// The frontend may store an empty "method" for each client (especially for
+	// legacy ciphers like aes-256-gcm). Xray's config file parser requires a
+	// valid cipher method on every client entry, so we copy the top-level
+	// "method" into any client that has an empty or missing one.
+	if i.Protocol == Shadowsocks {
+		settings = fixShadowsocksClientMethods(settings)
+	}
+
 	return &xray.InboundConfig{
 		Listen:         json_util.RawMessage(listen),
 		Port:           i.Port,
 		Protocol:       string(i.Protocol),
-		Settings:       json_util.RawMessage(i.Settings),
+		Settings:       json_util.RawMessage(settings),
 		StreamSettings: json_util.RawMessage(i.StreamSettings),
 		Tag:            i.Tag,
 		Sniffing:       json_util.RawMessage(i.Sniffing),
 	}
+}
+
+// fixShadowsocksClientMethods ensures each client in a Shadowsocks inbound
+// settings JSON has a valid "method" field. If a client's method is empty,
+// it inherits the inbound's top-level method.
+func fixShadowsocksClientMethods(settingsJson string) string {
+	var settings map[string]interface{}
+	if err := json.Unmarshal([]byte(settingsJson), &settings); err != nil {
+		return settingsJson
+	}
+
+	topMethod, _ := settings["method"].(string)
+	if topMethod == "" {
+		return settingsJson
+	}
+
+	clients, ok := settings["clients"].([]interface{})
+	if !ok || len(clients) == 0 {
+		return settingsJson
+	}
+
+	modified := false
+	for _, clientInterface := range clients {
+		if client, ok := clientInterface.(map[string]interface{}); ok {
+			clientMethod, _ := client["method"].(string)
+			if clientMethod == "" {
+				client["method"] = topMethod
+				modified = true
+			}
+		}
+	}
+
+	if !modified {
+		return settingsJson
+	}
+
+	fixed, err := json.Marshal(settings)
+	if err != nil {
+		return settingsJson
+	}
+	return string(fixed)
 }
 
 // Setting stores key-value configuration settings for the 3x-ui panel.

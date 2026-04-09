@@ -36,27 +36,6 @@ type Inbound struct {
 	Remark         string `json:"remark"`
 }
 
-type XrayOutbound struct {
-	Id             int    `json:"id"`
-	SlaveId        int    `json:"slaveId"`
-	Tag            string `json:"tag"`
-	Protocol       string `json:"protocol"`
-	Settings       string `json:"settings"`
-	StreamSettings string `json:"streamSettings"`
-	Enable         bool   `json:"enable"`
-}
-
-type XrayRoutingRule struct {
-	Id          int    `json:"id"`
-	SlaveId     int    `json:"slaveId"`
-	Type        string `json:"type"`
-	OutboundTag string `json:"outboundTag"`
-	Domain      string `json:"domain"`
-	Ip          string `json:"ip"`
-	Port        string `json:"port"`
-}
-
-// Xray config structures
 type XrayConfig struct {
 	Inbounds []map[string]interface{} `json:"inbounds"`
 	Outbounds []map[string]interface{} `json:"outbounds"`
@@ -246,32 +225,9 @@ func buildExpectedConfig(db *gorm.DB, slaveId int) (*XrayConfig, error) {
 		config.Inbounds = append(config.Inbounds, inboundConfig)
 	}
 
-	// Get outbounds
-	var outbounds []XrayOutbound
-	if err := db.Where("slave_id = ? AND enable = ?", slaveId, true).Find(&outbounds).Error; err != nil {
-		return nil, err
-	}
-
-	for _, outbound := range outbounds {
-		outboundConfig := map[string]interface{}{
-			"tag":      outbound.Tag,
-			"protocol": outbound.Protocol,
-		}
-		
-		if outbound.Settings != "" {
-			var settings map[string]interface{}
-			json.Unmarshal([]byte(outbound.Settings), &settings)
-			outboundConfig["settings"] = settings
-		}
-		
-		if outbound.StreamSettings != "" {
-			var streamSettings map[string]interface{}
-			json.Unmarshal([]byte(outbound.StreamSettings), &streamSettings)
-			outboundConfig["streamSettings"] = streamSettings
-		}
-		
-		config.Outbounds = append(config.Outbounds, outboundConfig)
-	}
+	// Note: Outbounds and routing rules are stored in xrayTemplateConfig (slave_settings table)
+	// and are not individually tracked in separate tables.
+	// The verify script only validates inbounds from the database.
 
 	return config, nil
 }
